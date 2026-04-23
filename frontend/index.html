@@ -169,6 +169,13 @@
       0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,.4); }
       50%       { box-shadow: 0 0 0 4px rgba(63,185,80,0); }
     }
+    mark.hl {
+      background: #b8860b44;
+      color: #ffd700;
+      border-radius: 3px;
+      padding: 0 2px;
+      font-style: normal;
+    }
     .badge-sev-高  { background: #3d2a1a; color: #ffa657; }
     .badge-sev-中  { background: #3a2a1a; color: #e3b341; }
     .badge-sev-低  { background: #1a2a1a; color: #7ee787; }
@@ -422,7 +429,7 @@
         <div class="news-header">
           <div class="news-title">
             <span class="badge badge-new" x-show="isTodayCollected(article)" style="margin-right:6px;font-size:11px;padding:2px 7px;vertical-align:middle">NEW</span>
-            <a :href="article.url" target="_blank" x-text="article.title"></a>
+            <a :href="article.url" target="_blank" x-html="highlight(article.title, filters.q)"></a>
           </div>
           <span class="news-date" x-text="formatDate(article.published_date || article.collected_date)"></span>
         </div>
@@ -433,7 +440,7 @@
           <span class="badge badge-system" x-show="article.affected_system" x-text="'💻 ' + article.affected_system"></span>
           <span class="badge" :class="'badge-sev-' + article.severity" x-show="article.severity" x-text="'⚠️ ' + article.severity"></span>
         </div>
-        <div class="news-summary" x-show="article.summary" x-text="article.summary"></div>
+        <div class="news-summary" x-show="article.summary" x-html="highlight(article.summary, filters.q)"></div>
       </div>
     </template>
   </div>
@@ -632,6 +639,20 @@ function dashboard() {
       const end   = Math.min(this.totalPages, start + 4);
       for (let i = start; i <= end; i++) pages.push(i);
       return pages;
+    },
+
+    highlight(text, keyword) {
+      if (!text) return '';
+      // 先 escape HTML，防止 XSS
+      const esc = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+      if (!keyword || !keyword.trim()) return esc;
+      // 把關鍵字中的 regex 特殊字元 escape
+      const safe = keyword.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return esc.replace(new RegExp(safe, 'gi'), m => `<mark class="hl">${m}</mark>`);
     },
 
     formatDate(d) {
