@@ -181,6 +181,13 @@
     .badge-sev-低  { background: #1a2a1a; color: #7ee787; }
     .badge-source  { background: var(--surface); color: var(--text-dim); }
     .news-summary { color: var(--text-dim); font-size: 13px; line-height: 1.65; }
+    .copy-btn {
+      flex-shrink: 0; background: transparent; border: 1px solid var(--border);
+      color: var(--text-dim); border-radius: 6px; padding: 3px 8px;
+      font-size: 12px; cursor: pointer; transition: all .2s; white-space: nowrap;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .copy-btn.copied { border-color: var(--accent2); color: var(--accent2); }
     .news-date { color: var(--text-dim); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
 
     /* ── 分頁 ── */
@@ -440,7 +447,14 @@
             <span class="badge badge-new" x-show="isTodayCollected(article)" style="margin-right:6px;font-size:11px;padding:2px 7px;vertical-align:middle">NEW</span>
             <a :href="article.url" target="_blank" x-html="highlight(article.title, filters.q)"></a>
           </div>
-          <span class="news-date" x-text="formatDate(article.published_date || article.collected_date)"></span>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span class="news-date" x-text="formatDate(article.published_date || article.collected_date)"></span>
+            <button class="copy-btn"
+                    :class="{ 'copied': copiedId === article.id }"
+                    @click="copyLink(article)"
+                    x-text="copiedId === article.id ? '✓ 已複製' : '🔗 複製'">
+            </button>
+          </div>
         </div>
         <div class="news-meta">
           <span class="badge badge-source" x-text="article.source_name || '未知來源'"></span>
@@ -582,6 +596,7 @@ function dashboard() {
     currentPage:  1,
     pageSize:     15,
     trendDays:    7,
+    copiedId:     null,
     totalItems:   0,
     totalPages:   1,
     lastUpdate:   '—',
@@ -655,6 +670,22 @@ function dashboard() {
       const end   = Math.min(this.totalPages, start + 4);
       for (let i = start; i <= end; i++) pages.push(i);
       return pages;
+    },
+
+    async copyLink(article) {
+      try {
+        await navigator.clipboard.writeText(article.url);
+      } catch {
+        // fallback：舊瀏覽器或非 HTTPS
+        const el = document.createElement('textarea');
+        el.value = article.url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      this.copiedId = article.id;
+      setTimeout(() => { this.copiedId = null; }, 2000);
     },
 
     exportCSV() {
