@@ -5,7 +5,6 @@ FastAPI 主程式
 
 import logging
 import os
-from collections import Counter
 from datetime import datetime, timedelta
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -15,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy import func, case, and_, extract
 from sqlalchemy.orm import Session
 
 from .database import (
@@ -83,6 +83,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ──────────────────────────────────────────────
+# Health Check（不需 DB，給 Railway 用）
+# ──────────────────────────────────────────────
+
+@app.get("/health", tags=["系統"])
+def health():
+    return {"status": "ok"}
 
 
 # ──────────────────────────────────────────────
@@ -221,48 +230,67 @@ def get_news(article_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/stats", response_model=DashboardStats, tags=["前台"])
 def get_stats(db: Session = Depends(get_db)):
-    all_articles = db.query(NewsArticle).all()
-    total = len(all_articles)
-
     today = datetime.utcnow().date()
-    today_count = sum(
-        1 for a in all_articles
-        if a.collected_date and a.collected_date.date() == today
-    )
-    critical_count = sum(1 for a in all_articles if a.severity == "嚴重")
-    today_critical = sum(
-        1 for a in all_articles
-        if a.severity == "嚴重" and a.collected_date and a.collected_date.date() == today
-    )
-    month_critical = sum(
-        1 for a in all_articles
-        if a.severity == "嚴重" and a.collected_date and
-           a.collected_date.year == today.year and a.collected_date.month == today.month
-    )
+    month_start = today.replace(day=1)
 
-    # 分布統計
-    def top_items(counter, n=8) -> list:
-        return [
-            StatsItem(label=k, count=v)
-            for k, v in counter.most_common(n)
-            if k
-        ]
+    # ── 數字統計（全部用 SQL COUNT，不載入資料到記憶體）──
+    total = db.query(func.count(NewsArticle.id)).scalar() or 0
 
-    attack_counter  = Counter(a.attack_type     for a in all_articles if a.attack_type)
-    region_counter  = Counter(a.region          for a in all_articles if a.region)
-    system_counter  = Counter(a.affected_system for a in all_articles if a.affected_system)
-    severity_counter= Counter(a.severity        for a in all_articles if a.severity)
+    today_count = db.query(func.count(NewsArticle.id)).filter(
+        func.date(NewsArticle.collected_date) == today
+    ).scalar() or 0
 
-    # 近 7 天趨勢（依發佈日期；無發佈日期者以收集日期補位）
-    weekly = []
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        count = sum(
-            1 for a in all_articles
-            if (a.published_date or a.collected_date) and
-               (a.published_date or a.collected_date).date() == d
+    critical_count = db.query(func.count(NewsArticle.id)).filter(
+        NewsArticle.severity == "嚴重"
+    ).scalar() or 0
+
+    today_critical = db.query(func.count(NewsArticle.id)).filter(
+        NewsArticle.severity == "嚴重",
+        func.date(NewsArticle.collected_date) == today
+    ).scalar() or 0
+
+    month_critical = db.query(func.count(NewsArticle.id)).filter(
+        NewsArticle.severity == "嚴重",
+        NewsArticle.collected_date >= month_start
+    ).scalar() or 0
+
+    # ── 分布統計（GROUP BY）──
+    def group_top(column, n=8) -> list[StatsItem]:
+        rows = (
+            db.query(column, func.count(NewsArticle.id).label("cnt"))
+            .filter(column.isnot(None), column != "")
+            .group_by(column)
+            .order_by(func.count(NewsArticle.id).desc())
+            .limit(n)
+            .all()
         )
-        weekly.append(StatsItem(label=d.strftime("%m/%d"), count=count))
+        return [StatsItem(label=label, count=cnt) for label, cnt in rows]
+
+    attack_types  = group_top(NewsArticle.attack_type)
+    regions       = group_top(NewsArticle.region)
+    systems       = group_top(NewsArticle.affected_system)
+    severity_dist = group_top(NewsArticle.severity)
+
+    # ── 近 7 天趨勢（COALESCE published_date, collected_date，GROUP BY date）──
+    cutoff = today - timedelta(days=6)
+    eff_date = func.date(
+        func.coalesce(NewsArticle.published_date, NewsArticle.collected_date)
+    )
+    trend_rows = (
+        db.query(eff_date.label("d"), func.count(NewsArticle.id).label("cnt"))
+        .filter(eff_date >= cutoff)
+        .group_by("d")
+        .order_by("d")
+        .all()
+    )
+    trend_map = {str(row.d): row.cnt for row in trend_rows}
+    weekly = [
+        StatsItem(
+            label=(today - timedelta(days=6 - i)).strftime("%m/%d"),
+            count=trend_map.get(str(today - timedelta(days=6 - i)), 0)
+        )
+        for i in range(7)
+    ]
 
     return DashboardStats(
         total_articles    = total,
@@ -270,10 +298,10 @@ def get_stats(db: Session = Depends(get_db)):
         critical_articles = critical_count,
         today_critical    = today_critical,
         month_critical    = month_critical,
-        attack_types      = top_items(attack_counter),
-        regions           = top_items(region_counter),
-        affected_systems  = top_items(system_counter),
-        severity_dist     = top_items(severity_counter),
+        attack_types      = attack_types,
+        regions           = regions,
+        affected_systems  = systems,
+        severity_dist     = severity_dist,
         weekly_trend      = weekly,
     )
 
