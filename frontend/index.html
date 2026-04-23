@@ -481,19 +481,20 @@ const CHART_COLORS = [
 // ── 圖表：完全獨立於 Alpine.js，頁面載入後直接執行 ──────────────
 const _chartInstances = {};
 
+// draw 提到最外層，renderTrendChart 也可以呼叫
+function draw(id, cfg) {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (_chartInstances[id]) { try { _chartInstances[id].destroy(); } catch(e){} }
+  _chartInstances[id] = new Chart(canvas, cfg);
+}
+
 function renderCharts(stats) {
   Chart.defaults.color       = '#8b949e';
   Chart.defaults.borderColor = '#30363d';
 
   const labels = arr => (arr || []).map(x => x.label);
   const data   = arr => (arr || []).map(x => x.count);
-
-  const draw = (id, cfg) => {
-    const canvas = document.getElementById(id);
-    if (!canvas) return;
-    if (_chartInstances[id]) { try { _chartInstances[id].destroy(); } catch(e){} }
-    _chartInstances[id] = new Chart(canvas, cfg);
-  };
 
   draw('attackChart', {
     type: 'doughnut',
