@@ -346,7 +346,15 @@
       </div>
     </div>
     <div class="chart-card">
-      <div class="chart-title">📈 近 7 天新聞趨勢</div>
+      <div class="chart-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>📈 新聞趨勢</span>
+        <div style="display:flex;gap:4px">
+          <button class="page-btn" :class="{'active': trendDays===7}"
+                  @click="setTrendDays(7)" style="padding:4px 10px;font-size:12px">7 天</button>
+          <button class="page-btn" :class="{'active': trendDays===30}"
+                  @click="setTrendDays(30)" style="padding:4px 10px;font-size:12px">30 天</button>
+        </div>
+      </div>
       <div class="chart-wrap">
         <canvas id="trendChart"></canvas>
       </div>
@@ -524,12 +532,18 @@ function renderCharts(stats) {
     }
   });
 
+  renderTrendChart(stats.weekly_trend);
+}
+
+function renderTrendChart(trendData) {
+  const labels = d => d.map(i => i.label);
+  const data   = d => d.map(i => i.count);
   draw('trendChart', {
     type: 'line',
     data: {
-      labels:   labels(stats.weekly_trend),
+      labels:   labels(trendData),
       datasets: [{
-        data:            data(stats.weekly_trend),
+        data:            data(trendData),
         borderColor:     '#3fb950',
         backgroundColor: 'rgba(63,185,80,.15)',
         fill: true, tension: .3, pointRadius: 4,
@@ -551,7 +565,6 @@ window.addEventListener('DOMContentLoaded', () => {
   fetch('/api/stats')
     .then(r => r.json())
     .then(stats => {
-      // 更新 Alpine.js 的 stats（透過全域暴露）
       window._dashboardStats = stats;
       renderCharts(stats);
     })
@@ -566,6 +579,7 @@ function dashboard() {
     loading:      false,
     currentPage:  1,
     pageSize:     15,
+    trendDays:    7,
     totalItems:   0,
     totalPages:   1,
     lastUpdate:   '—',
@@ -639,6 +653,15 @@ function dashboard() {
       const end   = Math.min(this.totalPages, start + 4);
       for (let i = start; i <= end; i++) pages.push(i);
       return pages;
+    },
+
+    async setTrendDays(days) {
+      this.trendDays = days;
+      try {
+        const res  = await fetch(`/api/stats/trend?days=${days}`);
+        const data = await res.json();
+        renderTrendChart(data);
+      } catch(e) { console.error('趨勢載入失敗', e); }
     },
 
     highlight(text, keyword) {

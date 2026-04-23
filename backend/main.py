@@ -307,6 +307,34 @@ def get_stats(db: Session = Depends(get_db)):
 
 
 # ──────────────────────────────────────────────
+# 趨勢查詢（獨立端點，支援 7 / 30 天）
+# ──────────────────────────────────────────────
+
+@app.get("/api/stats/trend", response_model=list[StatsItem], tags=["前台"])
+def get_trend(days: int = Query(7, ge=7, le=30), db: Session = Depends(get_db)):
+    today  = datetime.utcnow().date()
+    cutoff = today - timedelta(days=days - 1)
+    eff_date = func.date(
+        func.coalesce(NewsArticle.published_date, NewsArticle.collected_date)
+    )
+    rows = (
+        db.query(eff_date.label("d"), func.count(NewsArticle.id).label("cnt"))
+        .filter(eff_date >= cutoff)
+        .group_by("d")
+        .order_by("d")
+        .all()
+    )
+    trend_map = {str(r.d): r.cnt for r in rows}
+    return [
+        StatsItem(
+            label=(today - timedelta(days=days - 1 - i)).strftime("%m/%d"),
+            count=trend_map.get(str(today - timedelta(days=days - 1 - i)), 0)
+        )
+        for i in range(days)
+    ]
+
+
+# ──────────────────────────────────────────────
 # 管理 API：設定
 # ──────────────────────────────────────────────
 
