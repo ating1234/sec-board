@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- 身體 -->
+  <ellipse cx="50" cy="78" rx="22" ry="18" fill="#e8001c"/>
+  <!-- 衣領白色 -->
+  <ellipse cx="50" cy="63" rx="10" ry="6" fill="#fff"/>
+
+  <!-- 耳朵左 -->
+  <ellipse cx="20" cy="42" rx="8" ry="10" fill="#f5c6a0"/>
+  <ellipse cx="20" cy="42" rx="5" ry="7" fill="#f0a080"/>
+  <!-- 耳朵右 -->
+  <ellipse cx="80" cy="42" rx="8" ry="10" fill="#f5c6a0"/>
+  <ellipse cx="80" cy="42" rx="5" ry="7" fill="#f0a080"/>
+
+  <!-- 臉 -->
+  <ellipse cx="50" cy="40" rx="30" ry="32" fill="#f9c784"/>
+  <!-- 臉部陰影/圓潤感 -->
+  <ellipse cx="50" cy="44" rx="28" ry="28" fill="#fad898"/>
+
+  <!-- 眉毛 -->
+  <path d="M32 26 Q38 22 44 26" stroke="#5a3010" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M56 26 Q62 22 68 26" stroke="#5a3010" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+  <!-- 眼白 -->
+  <ellipse cx="36" cy="35" rx="8" ry="9" fill="#fff"/>
+  <ellipse cx="64" cy="35" rx="8" ry="9" fill="#fff"/>
+  <!-- 眼珠 -->
+  <ellipse cx="37" cy="36" rx="5" ry="6" fill="#1a1a1a"/>
+  <ellipse cx="65" cy="36" rx="5" ry="6" fill="#1a1a1a"/>
+  <!-- 眼睛亮光 -->
+  <circle cx="39" cy="33" r="1.8" fill="#fff"/>
+  <circle cx="67" cy="33" r="1.8" fill="#fff"/>
+
+  <!-- 腮紅 -->
+  <ellipse cx="26" cy="46" rx="8" ry="5" fill="#f08080" opacity="0.5"/>
+  <ellipse cx="74" cy="46" rx="8" ry="5" fill="#f08080" opacity="0.5"/>
+
+  <!-- 鼻子 -->
+  <ellipse cx="50" cy="46" rx="3" ry="2" fill="#e07050"/>
+
+  <!-- 嘴巴 -->
+  <path d="M36 54 Q50 66 64 54" stroke="#c0392b" stroke-width="2.5" fill="#e8001c" stroke-linecap="round"/>
+  <!-- 牙齒 -->
+  <path d="M39 55 Q50 63 61 55 Q50 58 39 55Z" fill="#fff"/>
+
+  <!-- 頭頂頭髮 -->
+  <path d="M30 20 Q50 5 70 20 Q65 10 50 8 Q35 10 30 20Z" fill="#3a1a00"/>
+  <path d="M36 14 Q50 6 64 14" stroke="#3a1a00" stroke-width="3" fill="none"/>
+
+  <!-- 旺字標記（紅色圓形背章） -->
+  <circle cx="78" cy="78" r="13" fill="#e8001c"/>
+  <text x="78" y="83" text-anchor="middle" font-family="serif" font-size="13" font-weight="bold" fill="#fff">旺</text>
+</svg>

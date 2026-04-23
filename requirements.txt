@@ -1,0 +1,24 @@
+# 資安新聞分析平台 依賴套件
+# Python 3.11+
+
+# ── Web 框架 ──
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# ── 資料庫 ──
+sqlalchemy==2.0.36
+psycopg2-binary==2.9.10
+
+# ── RSS 爬蟲 ──
+feedparser==6.0.11
+requests==2.32.3
+
+# ── LLM（支援 Groq 與 Gemini，可在管理介面切換）──
+groq>=0.11.0
+google-genai>=1.0.0
+
+# ── 排程器 ──
+apscheduler==3.10.4
+
+# ── 工具 ──
+python-dotenv==1.0.1

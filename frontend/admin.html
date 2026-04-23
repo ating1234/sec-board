@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理介面 — 資安新聞分析平台</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js" defer></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --accent2:  #3fb950;
+      --danger:   #f85149;
+      --warn:     #d29922;
+      --text:     #c9d1d9;
+      --text-dim: #8b949e;
+      --card-bg:  #1c2128;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 20px; height: 56px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 100; gap: 10px;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .logo-text { }
+    .nav-links { display: flex; gap: 4px; }
+    .nav-links a { color: var(--text-dim); text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; }
+    .nav-links a:hover, .nav-links a.active { background: var(--border); color: var(--text); }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h2 { font-size: 18px; margin-bottom: 16px; color: var(--text); }
+
+    /* 分頁標籤：手機橫向捲動 */
+    .tabs {
+      display: flex; gap: 4px;
+      border-bottom: 1px solid var(--border); margin-bottom: 20px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none; /* Firefox */
+    }
+    .tabs::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+    .tab {
+      padding: 10px 14px; cursor: pointer; border-radius: 8px 8px 0 0;
+      color: var(--text-dim); border: 1px solid transparent; border-bottom: none;
+      transition: all .2s; white-space: nowrap; font-size: 13px; flex-shrink: 0;
+      touch-action: manipulation;
+    }
+    .tab:hover { color: var(--text); }
+    .tab.active { background: var(--card-bg); border-color: var(--border); color: var(--text); margin-bottom: -1px; }
+
+    /* 卡片 */
+    .card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px; margin-bottom: 16px;
+    }
+    .card-title { font-size: 15px; font-weight: 600; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+    /* 表單 */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+    .form-group label { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+    .form-group input, .form-group select, .form-group textarea {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 13px;
+      width: 100%;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none; border-color: var(--accent);
+    }
+    .form-group textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+    .form-group .hint { font-size: 11px; color: var(--text-dim); }
+    .form-actions { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    /* 按鈕 */
+    .btn {
+      padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer;
+      font-size: 13px; font-weight: 500; transition: all .2s;
+      touch-action: manipulation;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #388bfd; }
+    .btn-success { background: var(--accent2); color: #fff; }
+    .btn-success:hover { background: #2ea043; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #da3633; }
+    .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--border); color: var(--text); }
+    .btn-warn { background: var(--warn); color: #000; }
+    .btn-warn:hover { background: #b08800; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* 表格：包在可橫捲容器內 */
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table { width: 100%; border-collapse: collapse; min-width: 480px; }
+    .table th { text-align: left; padding: 10px 12px; color: var(--text-dim); font-size: 12px; text-transform: uppercase; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .table td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .table tr:hover td { background: rgba(255,255,255,.02); }
+    .table tr:last-child td { border-bottom: none; }
+
+    /* 狀態徽章 */
+    .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .badge-success { background: #1a3a2a; color: #56d364; }
+    .badge-danger  { background: #3d1a1a; color: #ff7b72; }
+    .badge-warn    { background: #3a2a1a; color: #e3b341; }
+    .badge-info    { background: #1f3a5f; color: #79c0ff; }
+
+    /* 系統監控 */
+    .monitor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .monitor-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+    .monitor-label { color: var(--text-dim); font-size: 11px; text-transform: uppercase; margin-bottom: 8px; }
+    .monitor-value { font-size: 22px; font-weight: 700; }
+
+    /* 爬蟲控制 */
+    .crawler-control {
+      display: flex; align-items: center; gap: 14px; padding: 14px;
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border); margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .crawler-control .ctrl-btns { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.running { background: var(--accent2); animation: pulse 1s infinite; }
+    .status-dot.idle    { background: var(--text-dim); }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+
+    /* 通知 */
+    .toast {
+      position: fixed; bottom: 20px; right: 16px; left: 16px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px;
+      color: var(--text); font-size: 13px; z-index: 1000;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.5);
+    }
+    @media (min-width: 600px) {
+      .toast { left: auto; min-width: 300px; max-width: 420px; }
+    }
+    .toast.success { border-left: 3px solid var(--accent2); }
+    .toast.error   { border-left: 3px solid var(--danger); }
+
+    /* 新增來源表單 */
+    .add-source-form { background: var(--surface); border: 1px dashed var(--border); border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+
+    /* 切換開關 */
+    .toggle { position: relative; display: inline-block; width: 40px; height: 22px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; inset: 0; background: var(--border); border-radius: 22px; transition: .3s; }
+    .slider:before { content:''; position:absolute; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:.3s; }
+    input:checked + .slider { background: var(--accent2); }
+    input:checked + .slider:before { transform: translateX(18px); }
+
+    /* ── 平板 ── */
+    @media (max-width: 768px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .monitor-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    /* ── 手機 ── */
+    @media (max-width: 600px) {
+      header { padding: 0 14px; height: 52px; }
+      .logo-text { display: none; }
+      .nav-links a { padding: 6px 10px; font-size: 12px; }
+
+      main { padding: 12px; }
+      h2 { font-size: 16px; margin-bottom: 12px; }
+
+      .tabs { margin-bottom: 14px; }
+      .tab { padding: 9px 12px; font-size: 12px; }
+
+      .card { padding: 14px; border-radius: 10px; margin-bottom: 12px; }
+      .card-title { font-size: 14px; margin-bottom: 12px; }
+
+      .form-grid { gap: 10px; }
+      .form-group input, .form-group select, .form-group textarea {
+        font-size: 14px; /* 防 iOS 自動縮放 */
+        padding: 10px 12px;
+      }
+      .form-actions { gap: 8px; }
+      .form-actions .btn { flex: 1; text-align: center; }
+
+      .monitor-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+      .monitor-card { padding: 12px; }
+      .monitor-value { font-size: 18px; }
+
+      .crawler-control { padding: 12px; gap: 10px; }
+      .crawler-control .ctrl-btns { margin-left: 0; width: 100%; }
+      .crawler-control .ctrl-btns .btn { flex: 1; }
+
+      .add-source-form { padding: 12px; }
+
+      .btn-sm { padding: 7px 12px; font-size: 12px; } /* 手機放大點擊區域 */
+    }
+  </style>
+</head>
+<body x-data="adminApp()" x-init="init()">
+
+<header>
+  <div class="logo"><img src="/static/wangwang-logo.jpeg" alt="旺旺" style="height:36px;vertical-align:middle;margin-right:6px;"><span class="logo-text">資安新聞分析平台</span></div>
+  <nav class="nav-links">
+    <a href="/">📊 儀表板</a>
+    <a href="/admin" class="active">⚙️ 管理</a>
+  </nav>
+  <button class="btn btn-ghost btn-sm" @click="logout()" style="flex-shrink:0">🚪 登出</button>
+</header>
+
+<main>
+  <h2>⚙️ 系統管理</h2>
+
+  <!-- 分頁標籤 -->
+  <div class="tabs">
+    <div class="tab" :class="{active: tab==='general'}"   @click="tab='general'">🔧 一般設定</div>
+    <div class="tab" :class="{active: tab==='llm'}"       @click="tab='llm'; loadSettings()">🤖 LLM 設定</div>
+    <div class="tab" :class="{active: tab==='sources'}"   @click="tab='sources'; loadSources()">📡 新聞來源</div>
+    <div class="tab" :class="{active: tab==='crawler'}"   @click="tab='crawler'; loadCrawlerLogs()">🕷️ 爬蟲控制</div>
+    <div class="tab" :class="{active: tab==='data'}"      @click="tab='data'">🗄️ 資料管理</div>
+    <div class="tab" :class="{active: tab==='monitor'}"   @click="tab='monitor'; loadSystemStats()">📊 系統監控</div>
+  </div>
+
+  <!-- ① 一般設定 -->
+  <div x-show="tab==='general'">
+    <div class="card">
+      <div class="card-title">🕐 爬蟲排程</div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px">
+        依台灣時區（UTC+8）；每個時段在同一分鐘執行，最多可設 3 個時段。
+      </p>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>時段 1（小時）</label>
+          <select x-model="schedHour1">
+            <template x-for="h in Array.from({length:24},(_,i)=>i)" :key="h">
+              <option :value="h" x-text="String(h).padStart(2,'0') + ':00'"></option>
+            </template>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>時段 2（小時）</label>
+          <select x-model="schedHour2">
+            <option value="">— 不啟用 —</option>
+            <template x-for="h in Array.from({length:24},(_,i)=>i)" :key="h">
+              <option :value="h" x-text="String(h).padStart(2,'0') + ':00'"></option>
+            </template>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>時段 3（小時）</label>
+          <select x-model="schedHour3">
+            <option value="">— 不啟用 —</option>
+            <template x-for="h in Array.from({length:24},(_,i)=>i)" :key="h">
+              <option :value="h" x-text="String(h).padStart(2,'0') + ':00'"></option>
+            </template>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>執行分鐘（0–59）</label>
+          <input type="number" min="0" max="59" x-model="settings.crawler_schedule_minute">
+          <span class="hint">所有時段均在此分鐘執行，預設 0 = 整點</span>
+        </div>
+        <div class="form-group">
+          <label>每次最多收集新聞數量</label>
+          <input type="number" min="1" max="50" x-model="settings.max_articles_per_day">
+          <span class="hint">建議 5–10 篇，過多會消耗較多 API 配額</span>
+        </div>
+        <div class="form-group">
+          <label>新聞保留天數</label>
+          <input type="number" min="7" max="365" x-model="settings.retention_days">
+          <span class="hint">超過此天數的新聞將在每次爬蟲後自動刪除</span>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="saveGeneralSettings()">💾 儲存設定</button>
+      </div>
+    </div>
+
+    <!-- 更改密碼 -->
+    <div class="card">
+      <div class="card-title">🔐 更改管理員密碼</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>目前密碼</label>
+          <input type="password" x-model="pwForm.current" placeholder="輸入目前密碼">
+        </div>
+        <div class="form-group"></div>
+        <div class="form-group">
+          <label>新密碼</label>
+          <input type="password" x-model="pwForm.newPw" placeholder="至少 6 個字元">
+        </div>
+        <div class="form-group">
+          <label>確認新密碼</label>
+          <input type="password" x-model="pwForm.confirm" placeholder="再次輸入新密碼">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="changePassword()">🔑 更改密碼</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② LLM 設定 -->
+  <div x-show="tab==='llm'">
+    <div class="card">
+      <div class="card-title">🤖 AI 分類供應商設定</div>
+
+      <!-- 供應商選擇 -->
+      <div class="form-group" style="margin-bottom:20px">
+        <label>LLM 供應商</label>
+        <div style="display:flex;gap:12px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid;transition:all .2s"
+                 :style="settings.llm_provider==='groq' ? 'border-color:var(--accent);background:rgba(88,166,255,.08)' : 'border-color:var(--border)'">
+            <input type="radio" value="groq" x-model="settings.llm_provider" style="accent-color:var(--accent)">
+            <div>
+              <div style="font-weight:600;color:var(--text)">⚡ Groq（推薦）</div>
+              <div style="font-size:11px;color:var(--text-dim)">免費 · 14,400 req/day · Llama-3.3-70B</div>
+            </div>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:10px 16px;border-radius:8px;border:2px solid;transition:all .2s"
+                 :style="settings.llm_provider==='gemini' ? 'border-color:var(--accent);background:rgba(88,166,255,.08)' : 'border-color:var(--border)'">
+            <input type="radio" value="gemini" x-model="settings.llm_provider" style="accent-color:var(--accent)">
+            <div>
+              <div style="font-weight:600;color:var(--text)">🔷 Google Gemini</div>
+              <div style="font-size:11px;color:var(--text-dim)">備用 · 需自備 API Key</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Groq 設定（供應商為 groq 時顯示） -->
+      <div x-show="settings.llm_provider==='groq'" style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--accent)">⚡ Groq 設定</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Groq API 金鑰</label>
+            <input type="password" x-model="settings.groq_api_key" placeholder="gsk_...">
+            <span class="hint">
+              前往 <a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>
+              免費申請（無需信用卡）
+            </span>
+          </div>
+          <div class="form-group">
+            <label>使用模型</label>
+            <select x-model="settings.groq_model">
+              <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile（推薦，最強）</option>
+              <option value="llama-3.1-8b-instant">llama-3.1-8b-instant（快速輕量）</option>
+              <option value="mixtral-8x7b-32768">mixtral-8x7b-32768（備選）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gemini 設定（供應商為 gemini 時顯示） -->
+      <div x-show="settings.llm_provider==='gemini'" style="border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:#5bc8ff">🔷 Gemini 設定</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Gemini API 金鑰</label>
+            <input type="password" x-model="settings.gemini_api_key" placeholder="AIza...">
+            <span class="hint">
+              前往 <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent)">aistudio.google.com</a>
+              取得（免費，需 Google 帳號）
+            </span>
+          </div>
+          <div class="form-group">
+            <label>使用模型</label>
+            <select x-model="settings.gemini_model">
+              <option value="gemini-2.0-flash">gemini-2.0-flash（推薦）</option>
+              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite（最輕量）</option>
+              <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash（最新預覽）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 共用提示詞 -->
+      <div class="form-group full">
+        <label>分類提示詞前綴（Prompt）</label>
+        <textarea x-model="settings.classification_prompt"></textarea>
+        <span class="hint">調整此提示詞可改變 AI 的分析風格，不需修改程式碼。留空則使用預設。</span>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" @click="saveLLMSettings()">💾 儲存設定</button>
+        <button class="btn btn-ghost" @click="testLLM()">🧪 測試連線</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 新聞來源 -->
+  <div x-show="tab==='sources'">
+    <!-- 新增來源表單 -->
+    <div class="add-source-form">
+      <div style="font-weight:600;margin-bottom:12px">➕ 新增來源</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>來源名稱</label>
+          <input type="text" x-model="newSource.name" placeholder="例：資安日報">
+        </div>
+        <div class="form-group">
+          <label>RSS Feed URL</label>
+          <input type="url" x-model="newSource.url" placeholder="https://example.com/feed">
+        </div>
+        <div class="form-group">
+          <label>地區</label>
+          <select x-model="newSource.region">
+            <option>台灣</option><option>中國大陸</option><option>香港澳門</option>
+            <option>其他亞太</option><option>北美</option><option>歐洲</option>
+            <option>中東</option><option>全球</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>優先順序</label>
+          <select x-model="newSource.priority">
+            <option value="1">1 — 最高（優先抓取）</option>
+            <option value="2">2 — 高</option>
+            <option value="3" selected>3 — 一般</option>
+            <option value="4">4 — 低</option>
+            <option value="5">5 — 最低</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-success" @click="addSource()">✅ 新增</button>
+      </div>
+    </div>
+
+    <!-- 來源列表 -->
+    <div class="card">
+      <div class="card-title">📡 新聞來源列表（<span x-text="sources.length"></span> 個）</div>
+      <div x-show="sources.length === 0" style="color:var(--text-dim);padding:20px 0;text-align:center">
+        暫無來源，請先新增
+      </div>
+      <div class="table-wrap">
+      <table class="table" x-show="sources.length > 0">
+        <thead>
+          <tr>
+            <th>名稱</th>
+            <th>地區</th>
+            <th>優先級</th>
+            <th>狀態</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="src in sources" :key="src.id">
+            <tr>
+              <td>
+                <div x-text="src.name" style="font-weight:500"></div>
+                <div style="font-size:11px;color:var(--text-dim);margin-top:2px" x-text="src.url"></div>
+              </td>
+              <td x-text="src.region"></td>
+              <td>
+                <select @change="updateSourcePriority(src, $event.target.value)"
+                        style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:4px;font-size:12px">
+                  <template x-for="p in [1,2,3,4,5]" :key="p">
+                    <option :value="p" :selected="p === src.priority" x-text="p"></option>
+                  </template>
+                </select>
+              </td>
+              <td>
+                <label class="toggle">
+                  <input type="checkbox" :checked="src.enabled"
+                         @change="toggleSource(src, $event.target.checked)">
+                  <span class="slider"></span>
+                </label>
+              </td>
+              <td>
+                <button class="btn btn-danger btn-sm" @click="deleteSource(src)">🗑️ 刪除</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      </div><!-- /table-wrap -->
+    </div>
+  </div>
+
+  <!-- ④ 爬蟲控制 -->
+  <div x-show="tab==='crawler'">
+    <div class="card">
+      <div class="card-title">🕷️ 爬蟲控制面板</div>
+
+      <!-- 每日爬蟲控制 -->
+      <div class="crawler-control">
+        <div class="status-dot" :class="crawlerRunning ? 'running' : 'idle'"></div>
+        <div>
+          <div style="font-weight:600" x-text="crawlerRunning ? '每日爬蟲執行中...' : '每日爬蟲待機'"></div>
+          <div style="font-size:12px;color:var(--text-dim)" x-text="scheduleSummary || ('下次排程：' + nextRun)"></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px" x-show="nextRun && scheduleSummary" x-text="'下次執行：' + nextRun"></div>
+        </div>
+        <div class="ctrl-btns">
+          <button class="btn btn-success" @click="runCrawler()" :disabled="crawlerRunning || historicalRunning">
+            ▶ 立即執行
+          </button>
+          <button class="btn btn-ghost" @click="refreshCrawlerStatus()">🔄 重新整理</button>
+        </div>
+      </div>
+
+      <!-- 歷史數據收集 -->
+      <div style="background:linear-gradient(135deg,#1a2a1f,#1f2a1a);border:1px solid #2a4a2a;border-radius:10px;padding:18px;margin-bottom:16px">
+        <div style="font-weight:600;margin-bottom:6px;color:#56d364">📚 歷史數據收集（一次性）</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px">
+          收集各來源近期所有新聞，不受每日數量上限限制。適合初始化資料庫，建議只執行一次。<br>
+          <span style="color:#e3b341">⚠️ 依文章數量與 Gemini API 速率限制，可能需要數分鐘至數十分鐘。</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:13px;color:var(--text-dim)">收集天數：</label>
+            <select x-model="historicalDays"
+                    style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px">
+              <option value="7">近 7 天</option>
+              <option value="14">近 14 天</option>
+              <option value="30" selected>近 30 天（建議）</option>
+              <option value="60">近 60 天</option>
+              <option value="90">近 90 天</option>
+            </select>
+          </div>
+          <button class="btn" style="background:#238636;color:#fff"
+                  @click="runHistoricalCollection()"
+                  :disabled="historicalRunning || crawlerRunning">
+            <span x-show="!historicalRunning">📥 開始歷史收集</span>
+            <span x-show="historicalRunning">⏳ 歷史收集進行中...</span>
+          </button>
+          <div x-show="historicalRunning" style="font-size:12px;color:#56d364;animation:pulse 1.5s infinite">
+            ● 背景執行中，完成後可在下方執行紀錄查看結果
+          </div>
+        </div>
+      </div>
+
+      <!-- 執行紀錄 -->
+      <div style="font-weight:600;margin-bottom:12px">📋 執行紀錄</div>
+      <div x-show="crawlerLogs.length === 0" style="color:var(--text-dim);padding:20px 0;text-align:center">
+        暫無執行紀錄
+      </div>
+      <div class="table-wrap">
+      <table class="table" x-show="crawlerLogs.length > 0">
+        <thead>
+          <tr>
+            <th>執行時間</th>
+            <th>狀態</th>
+            <th>收集篇數</th>
+            <th>來源數</th>
+            <th>耗時</th>
+            <th>備註</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="log in crawlerLogs" :key="log.id">
+            <tr>
+              <td x-text="formatDate(log.run_at)"></td>
+              <td>
+                <span class="badge"
+                  :class="{
+                    'badge-success': log.status==='success',
+                    'badge-danger':  log.status==='failed',
+                    'badge-warn':    log.status==='partial',
+                    'badge-info':    log.status==='running'
+                  }"
+                  x-text="statusLabel(log.status)">
+                </span>
+              </td>
+              <td x-text="log.articles_collected ?? '—'"></td>
+              <td x-text="log.sources_checked ?? '—'"></td>
+              <td x-text="log.duration_seconds ? log.duration_seconds.toFixed(1) + '秒' : '—'"></td>
+              <td style="color:var(--text-dim);font-size:12px" x-text="log.error_message || '—'"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      </div><!-- /table-wrap -->
+    </div>
+  </div>
+
+  <!-- ⑤ 資料管理 -->
+  <div x-show="tab==='data'">
+
+    <!-- 全部重新分類 -->
+    <div class="card">
+      <div class="card-title">🔄 全部重新分類</div>
+      <p style="color:var(--text-dim);margin-bottom:8px">
+        使用目前 LLM 設定（Groq / Gemini），重新分析資料庫中所有新聞的攻擊類型、地區、嚴重程度與中文摘要。
+      </p>
+      <p style="color:var(--warn);font-size:12px;margin-bottom:16px">
+        ⚠️ 依文章數量可能需要數分鐘。執行期間可繼續使用其他功能，進度請查看伺服器日誌（start_macos.sh 視窗）。
+      </p>
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn btn-primary" @click="reclassifyAll()"
+                :disabled="reclassifyAllRunning">
+          <span x-text="reclassifyAllRunning ? '⏳ 重新分類中...' : '🔄 開始全部重新分類'"></span>
+        </button>
+        <span x-show="reclassifyAllRunning" style="color:var(--accent);font-size:12px">
+          背景執行中，完成後日誌會顯示統計結果
+        </span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🗑️ 清理舊資料</div>
+      <p style="color:var(--text-dim);margin-bottom:16px">
+        依照「新聞保留天數」設定，刪除超過期限的舊新聞。此操作無法還原。
+      </p>
+      <button class="btn btn-warn" @click="cleanupData()">🧹 立即清理過期新聞</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔍 新聞管理</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input type="text" x-model="dataSearch" placeholder="搜尋標題..."
+               style="flex:1;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 12px;border-radius:8px;font-size:14px">
+        <button class="btn btn-primary" @click="searchArticles()">搜尋</button>
+      </div>
+      <div class="table-wrap">
+      <table class="table" x-show="dataArticles.length > 0">
+        <thead>
+          <tr>
+            <th>標題</th>
+            <th>來源</th>
+            <th>攻擊類型</th>
+            <th>嚴重程度</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="a in dataArticles" :key="a.id">
+            <tr>
+              <td>
+                <a :href="a.url" target="_blank" style="color:var(--accent);text-decoration:none"
+                   x-text="a.title.length > 50 ? a.title.slice(0,50)+'...' : a.title"></a>
+              </td>
+              <td x-text="a.source_name" style="white-space:nowrap"></td>
+              <td x-text="a.attack_type || '—'" style="white-space:nowrap"></td>
+              <td>
+                <span class="badge"
+                  :class="{
+                    'badge-danger':  a.severity==='嚴重',
+                    'badge-warn':    a.severity==='高',
+                    'badge-info':    a.severity==='中',
+                    'badge-success': a.severity==='低'
+                  }"
+                  x-text="a.severity || '—'">
+                </span>
+              </td>
+              <td>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-ghost btn-sm" @click="reclassifyArticle(a.id)" title="重新 AI 分類">🔄</button>
+                  <button class="btn btn-danger btn-sm" @click="deleteArticle(a.id)">🗑️</button>
+                </div>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      </div><!-- /table-wrap -->
+      <div x-show="dataArticles.length === 0" style="color:var(--text-dim);padding:20px 0;text-align:center">
+        請輸入關鍵字搜尋新聞
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑥ 系統監控 -->
+  <div x-show="tab==='monitor'">
+    <div class="monitor-grid" style="margin-bottom:20px">
+      <div class="monitor-card">
+        <div class="monitor-label">新聞總數</div>
+        <div class="monitor-value" style="color:var(--accent)" x-text="sysStats.total_articles ?? '—'"></div>
+      </div>
+      <div class="monitor-card">
+        <div class="monitor-label">啟用來源</div>
+        <div class="monitor-value" style="color:var(--accent2)"
+             x-text="sysStats.sources_enabled + ' / ' + sysStats.sources_total"></div>
+      </div>
+      <div class="monitor-card">
+        <div class="monitor-label">估算資料量</div>
+        <div class="monitor-value" style="color:var(--warn)" x-text="sysStats.db_size_estimate ?? '—'"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🕷️ 上次爬蟲</div>
+      <table class="table">
+        <tr><td style="color:var(--text-dim)">執行時間</td><td x-text="formatDate(sysStats.last_crawl)"></td></tr>
+        <tr><td style="color:var(--text-dim)">執行結果</td>
+          <td>
+            <span class="badge"
+              :class="{
+                'badge-success': sysStats.last_crawl_status==='success',
+                'badge-danger':  sysStats.last_crawl_status==='failed',
+                'badge-warn':    sysStats.last_crawl_status==='partial'
+              }"
+              x-text="statusLabel(sysStats.last_crawl_status) || '尚未執行'">
+            </span>
+          </td>
+        </tr>
+        <tr><td style="color:var(--text-dim)">排程設定</td><td x-text="scheduleSummary || '—'"></td></tr>
+        <tr><td style="color:var(--text-dim)">下次執行</td><td x-text="nextRun || '—'"></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 API 端點</div>
+      <table class="table">
+        <thead><tr><th>端點</th><th>說明</th><th>連結</th></tr></thead>
+        <tbody>
+          <tr><td><code>/api/news</code></td><td>新聞查詢</td><td><a href="/api/news" target="_blank" style="color:var(--accent)">開啟</a></td></tr>
+          <tr><td><code>/api/stats</code></td><td>統計資料</td><td><a href="/api/stats" target="_blank" style="color:var(--accent)">開啟</a></td></tr>
+          <tr><td><code>/docs</code></td><td>API 文件（Swagger）</td><td><a href="/docs" target="_blank" style="color:var(--accent)">開啟</a></td></tr>
+          <tr><td><code>/redoc</code></td><td>API 文件（ReDoc）</td><td><a href="/redoc" target="_blank" style="color:var(--accent)">開啟</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast 通知 -->
+<div class="toast" :class="toast.type" x-show="toast.show" x-transition>
+  <span x-text="toast.icon"></span>
+  <span x-text="toast.message"></span>
+</div>
+
+<script>
+const API = '';
+
+function adminApp() {
+  return {
+    tab: 'general',
+    settings: {},
+    sources: [],
+    crawlerLogs: [],
+    crawlerRunning: false,
+    historicalRunning: false,
+    historicalDays: 30,
+    nextRun: '—',
+    scheduleSummary: '',
+    schedHour1: 8,
+    schedHour2: 14,
+    schedHour3: 20,
+    sysStats: {},
+    dataSearch: '',
+    dataArticles: [],
+    reclassifyAllRunning: false,
+    pwForm: { current: '', newPw: '', confirm: '' },
+    newSource: { name:'', url:'', region:'全球', priority: 3 },
+    toast: { show: false, message: '', type: 'success', icon: '✅' },
+
+    async init() {
+      await this.loadSettings();
+      await this.refreshCrawlerStatus();
+    },
+
+    // ── 全域 fetch wrapper：攔截 401 自動導向登入頁 ────────────
+    async apiFetch(url, options = {}) {
+      const res = await fetch(url, { credentials: 'same-origin', ...options });
+      if (res.status === 401) {
+        window.location.href = '/admin/login?next=' + encodeURIComponent(window.location.pathname);
+        return null;
+      }
+      return res;
+    },
+
+    // ── 登出 ──────────────────────────────────────────────────
+    async logout() {
+      await fetch('/api/admin/logout', { method: 'POST', credentials: 'same-origin' });
+      window.location.href = '/admin/login';
+    },
+
+    // ── 更改密碼 ──────────────────────────────────────────────
+    async changePassword() {
+      const { current, newPw, confirm } = this.pwForm;
+      if (!current)              { this.showToast('請輸入目前密碼', 'error'); return; }
+      if (newPw.length < 6)     { this.showToast('新密碼至少需要 6 個字元', 'error'); return; }
+      if (newPw !== confirm)    { this.showToast('兩次輸入的新密碼不一致', 'error'); return; }
+      try {
+        const res = await this.apiFetch('/api/admin/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: current, new_password: newPw }),
+        });
+        if (!res) return;
+        if (res.ok) {
+          this.showToast('✅ 密碼已更改，下次登入使用新密碼', 'success');
+          this.pwForm = { current: '', newPw: '', confirm: '' };
+        } else {
+          const d = await res.json();
+          this.showToast(d.detail || '更改失敗', 'error');
+        }
+      } catch(e) { this.showToast('更改失敗：' + e, 'error'); }
+    },
+
+    async loadSettings() {
+      try {
+        const res = await this.apiFetch(`${API}/api/admin/settings`);
+        if (!res) return;
+        const rows = await res.json();
+        this.settings = {};
+        rows.forEach(r => { this.settings[r.key] = r.value; });
+        // 解析 crawler_schedule_hours 還原 3 個時段選擇器
+        const hoursRaw = this.settings.crawler_schedule_hours || this.settings.crawler_schedule_hour || '8,14,20';
+        const hours = hoursRaw.split(',').map(h => h.trim()).filter(Boolean);
+        this.schedHour1 = hours[0] !== undefined ? parseInt(hours[0]) : 8;
+        this.schedHour2 = hours[1] !== undefined ? parseInt(hours[1]) : '';
+        this.schedHour3 = hours[2] !== undefined ? parseInt(hours[2]) : '';
+      } catch(e) { this.showToast('載入設定失敗', 'error'); }
+    },
+
+    async saveGeneralSettings() {
+      // 組合啟用的時段（過濾掉空值，去重後排序）
+      const hoursArr = [this.schedHour1, this.schedHour2, this.schedHour3]
+        .filter(h => h !== '' && h !== null && h !== undefined)
+        .map(Number)
+        .filter((v, i, a) => !isNaN(v) && a.indexOf(v) === i)
+        .sort((a, b) => a - b);
+      const hoursStr = hoursArr.join(',');
+      const payload = {
+        settings: {
+          crawler_schedule_hours:  hoursStr,
+          crawler_schedule_minute: this.settings.crawler_schedule_minute,
+          max_articles_per_day:    this.settings.max_articles_per_day,
+          retention_days:          this.settings.retention_days,
+        }
+      };
+      await this.saveSettings(payload, '排程設定已儲存，立即生效');
+      await this.refreshCrawlerStatus();
+    },
+
+    async saveLLMSettings() {
+      const payload = {
+        settings: {
+          llm_provider:          this.settings.llm_provider,
+          groq_api_key:          this.settings.groq_api_key,
+          groq_model:            this.settings.groq_model,
+          gemini_api_key:        this.settings.gemini_api_key,
+          gemini_model:          this.settings.gemini_model,
+          classification_prompt: this.settings.classification_prompt,
+        }
+      };
+      await this.saveSettings(payload, 'LLM 設定已儲存');
+    },
+
+    async saveSettings(payload, msg) {
+      try {
+        const res = await fetch(`${API}/api/admin/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) this.showToast(msg, 'success');
+        else        this.showToast('儲存失敗', 'error');
+      } catch(e) { this.showToast('儲存失敗：' + e, 'error'); }
+    },
+
+    async testLLM() {
+      this.showToast('測試後端連線中...', 'info');
+      try {
+        const res = await fetch(`${API}/api/admin/crawler/status`);
+        if (res.ok) {
+          const provider = (this.settings.llm_provider || 'groq').toUpperCase();
+          this.showToast(`後端連線正常（目前供應商：${provider}），將在下次爬蟲時驗證 API Key`, 'success');
+        } else {
+          this.showToast('後端連線失敗', 'error');
+        }
+      } catch(e) { this.showToast('後端連線失敗：' + e, 'error'); }
+    },
+
+    async loadSources() {
+      try {
+        const res = await fetch(`${API}/api/admin/sources`);
+        this.sources = await res.json();
+      } catch(e) { this.showToast('載入來源失敗', 'error'); }
+    },
+
+    async addSource() {
+      if (!this.newSource.name || !this.newSource.url) {
+        this.showToast('請填寫名稱和 URL', 'error'); return;
+      }
+      try {
+        const res = await fetch(`${API}/api/admin/sources`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.newSource)
+        });
+        if (res.ok) {
+          this.newSource = { name:'', url:'', region:'全球', priority: 3 };
+          await this.loadSources();
+          this.showToast('來源已新增', 'success');
+        } else {
+          const err = await res.json();
+          this.showToast(err.detail || '新增失敗', 'error');
+        }
+      } catch(e) { this.showToast('新增失敗', 'error'); }
+    },
+
+    async toggleSource(src, enabled) {
+      await fetch(`${API}/api/admin/sources/${src.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled })
+      });
+      src.enabled = enabled;
+      this.showToast(enabled ? `${src.name} 已啟用` : `${src.name} 已停用`, 'success');
+    },
+
+    async updateSourcePriority(src, priority) {
+      await fetch(`${API}/api/admin/sources/${src.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority: parseInt(priority) })
+      });
+      src.priority = parseInt(priority);
+      this.showToast('優先順序已更新', 'success');
+    },
+
+    async deleteSource(src) {
+      if (!confirm(`確定要刪除「${src.name}」？`)) return;
+      try {
+        await fetch(`${API}/api/admin/sources/${src.id}`, { method: 'DELETE' });
+        this.sources = this.sources.filter(s => s.id !== src.id);
+        this.showToast('來源已刪除', 'success');
+      } catch(e) { this.showToast('刪除失敗', 'error'); }
+    },
+
+    async runCrawler() {
+      try {
+        const res = await fetch(`${API}/api/admin/crawler/run`, { method: 'POST' });
+        const data = await res.json();
+        this.showToast(data.message, 'success');
+        this.crawlerRunning = true;
+        // 每 5 秒輪詢狀態
+        const poll = setInterval(async () => {
+          await this.refreshCrawlerStatus();
+          if (!this.crawlerRunning) {
+            clearInterval(poll);
+            await this.loadCrawlerLogs();
+            this.showToast('爬蟲執行完成', 'success');
+          }
+        }, 5000);
+      } catch(e) { this.showToast('啟動失敗', 'error'); }
+    },
+
+    async refreshCrawlerStatus() {
+      try {
+        const [statusRes, histRes] = await Promise.all([
+          fetch(`${API}/api/admin/crawler/status`),
+          fetch(`${API}/api/admin/crawler/historical/status`),
+        ]);
+        const status = await statusRes.json();
+        const hist   = await histRes.json();
+        this.crawlerRunning    = status.running;
+        this.nextRun           = status.next_run;
+        this.scheduleSummary   = status.schedule_summary || '';
+        this.historicalRunning = hist.running;
+      } catch(e) {}
+    },
+
+    async runHistoricalCollection() {
+      if (!confirm(`確定要收集近 ${this.historicalDays} 天的歷史新聞？\n\n依文章數量，可能需要數分鐘至數十分鐘。\n執行期間請勿關閉瀏覽器視窗（後端仍會繼續執行）。`)) return;
+      try {
+        const res  = await fetch(`${API}/api/admin/crawler/historical?days=${this.historicalDays}`, { method: 'POST' });
+        const data = await res.json();
+        this.historicalRunning = (data.status === 'started');
+        this.showToast(data.message, data.status === 'started' ? 'success' : 'warn');
+
+        if (data.status === 'started') {
+          // 每 10 秒輪詢一次狀態
+          const poll = setInterval(async () => {
+            await this.refreshCrawlerStatus();
+            if (!this.historicalRunning) {
+              clearInterval(poll);
+              await this.loadCrawlerLogs();
+              this.showToast('歷史數據收集完成！請至儀表板查看結果。', 'success');
+            }
+          }, 10000);
+        }
+      } catch(e) {
+        this.showToast('歷史收集啟動失敗：' + e, 'error');
+      }
+    },
+
+    async loadCrawlerLogs() {
+      try {
+        const res = await fetch(`${API}/api/admin/crawler/logs`);
+        this.crawlerLogs = await res.json();
+      } catch(e) {}
+    },
+
+    async searchArticles() {
+      try {
+        const q   = this.dataSearch;
+        const res = await fetch(`${API}/api/news?q=${encodeURIComponent(q)}&size=50`);
+        const data= await res.json();
+        this.dataArticles = data.items;
+      } catch(e) { this.showToast('搜尋失敗', 'error'); }
+    },
+
+    async reclassifyAll() {
+      if (!confirm('確定要重新分類所有新聞？\n依文章數量可能需要數分鐘，執行期間可繼續使用介面。')) return;
+      try {
+        const res  = await fetch(`${API}/api/admin/news/reclassify-all`, { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'started') {
+          this.reclassifyAllRunning = true;
+          this.showToast('全部重新分類已開始，進度請看伺服器日誌', 'success');
+          // 輪詢狀態，直到完成
+          const poll = setInterval(async () => {
+            try {
+              const s = await fetch(`${API}/api/admin/news/reclassify-all/status`);
+              const d = await s.json();
+              if (!d.running) {
+                this.reclassifyAllRunning = false;
+                clearInterval(poll);
+                this.showToast('✅ 全部重新分類完成！', 'success');
+              }
+            } catch(e) { clearInterval(poll); this.reclassifyAllRunning = false; }
+          }, 5000);
+        } else {
+          this.showToast(data.message || '已在執行中', 'info');
+        }
+      } catch(e) { this.showToast('啟動失敗：' + e, 'error'); }
+    },
+
+    async reclassifyArticle(id) {
+      try {
+        await fetch(`${API}/api/admin/news/${id}/reclassify`, { method: 'POST' });
+        this.showToast('重新分類已啟動（背景執行）', 'success');
+      } catch(e) { this.showToast('失敗', 'error'); }
+    },
+
+    async deleteArticle(id) {
+      if (!confirm('確定要刪除此篇新聞？')) return;
+      try {
+        await fetch(`${API}/api/admin/news/${id}`, { method: 'DELETE' });
+        this.dataArticles = this.dataArticles.filter(a => a.id !== id);
+        this.showToast('已刪除', 'success');
+      } catch(e) { this.showToast('刪除失敗', 'error'); }
+    },
+
+    async cleanupData() {
+      if (!confirm('確定要清理過期新聞？此操作無法還原。')) return;
+      try {
+        const res  = await fetch(`${API}/api/admin/cleanup`, { method: 'POST' });
+        const data = await res.json();
+        this.showToast(data.message, 'success');
+      } catch(e) { this.showToast('清理失敗', 'error'); }
+    },
+
+    async loadSystemStats() {
+      try {
+        const [sysRes, statusRes] = await Promise.all([
+          fetch(`${API}/api/admin/system`),
+          fetch(`${API}/api/admin/crawler/status`)
+        ]);
+        this.sysStats = await sysRes.json();
+        const status  = await statusRes.json();
+        this.nextRun  = status.next_run;
+      } catch(e) {}
+    },
+
+    statusLabel(s) {
+      return { success:'成功', failed:'失敗', partial:'部分成功', running:'執行中' }[s] || s || '—';
+    },
+
+    formatDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleString('zh-TW');
+    },
+
+    showToast(message, type = 'success') {
+      const icons = { success:'✅', error:'❌', info:'ℹ️', warn:'⚠️' };
+      this.toast = { show: true, message, type, icon: icons[type] || 'ℹ️' };
+      setTimeout(() => { this.toast.show = false; }, 3500);
+    }
+  };
+}
+</script>
+</body>
+</html>

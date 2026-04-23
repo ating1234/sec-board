@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>資安新聞分析平台</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/alpinejs/3.13.5/cdn.min.js" defer></script>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --accent2:  #3fb950;
+      --danger:   #f85149;
+      --warn:     #d29922;
+      --text:     #c9d1d9;
+      --text-dim: #8b949e;
+      --card-bg:  #1c2128;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+    /* ── 頂部導覽 ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 100;
+      gap: 12px;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+    .logo-icon { font-size: 20px; }
+    .nav-links { display: flex; gap: 4px; }
+    .nav-links a {
+      color: var(--text-dim); text-decoration: none; padding: 6px 12px;
+      border-radius: 6px; transition: all .2s; font-size: 13px;
+    }
+    .nav-links a:hover, .nav-links a.active { background: var(--border); color: var(--text); }
+    .header-right { display: flex; align-items: center; gap: 12px; color: var(--text-dim); font-size: 12px; flex-shrink: 0; }
+    .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent2); animation: pulse 2s infinite; display: inline-block; margin-right: 4px; }
+    @keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+
+    /* ── 主內容 ── */
+    main { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    /* ── 統計卡片 ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .stat-label { color: var(--text-dim); font-size: 11px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-value { font-size: 32px; font-weight: 700; line-height: 1; }
+    .stat-sub { color: var(--text-dim); font-size: 11px; margin-top: 4px; }
+    .color-blue   { color: var(--accent); }
+    .color-green  { color: var(--accent2); }
+    .color-red    { color: var(--danger); }
+    .color-yellow { color: var(--warn); }
+
+    /* ── 圖表區 ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .chart-title { font-weight: 600; margin-bottom: 12px; font-size: 13px; color: var(--text); }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── 篩選區 ── */
+    .filter-toggle-btn {
+      width: 100%; background: var(--card-bg); border: 1px solid var(--border);
+      color: var(--text); padding: 10px 16px; border-radius: 10px;
+      font-size: 13px; cursor: pointer; text-align: left; margin-bottom: 8px;
+      display: none; /* 桌面隱藏，手機顯示 */
+    }
+    .filter-bar {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-group label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; }
+    .filter-bar input, .filter-bar select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      min-width: 130px;
+    }
+    .filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--accent); }
+    .btn {
+      padding: 9px 18px; border-radius: 6px; border: none;
+      cursor: pointer; font-size: 13px; font-weight: 500; transition: all .2s;
+      touch-action: manipulation; /* 提升手機點擊響應 */
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #388bfd; }
+    .btn-ghost { background: transparent; color: var(--text-dim); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--border); color: var(--text); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #da3633; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ── 新聞列表 ── */
+    .news-list { display: flex; flex-direction: column; gap: 10px; }
+    .news-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      transition: border-color .2s;
+    }
+    .news-card:hover { border-color: var(--accent); }
+    .news-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .news-title { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; }
+    .news-title a { color: inherit; text-decoration: none; }
+    .news-title a:hover { color: var(--accent); }
+    .news-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .badge-attack  { background: #1f3a5f; color: #79c0ff; }
+    .badge-region  { background: #1a3a2a; color: #56d364; }
+    .badge-system  { background: #3a2a1f; color: #e3b341; }
+    .badge-sev-嚴重{ background: #3d1a1a; color: #ff7b72; border: 1px solid #f85149; }
+    .badge-new {
+      background: #1a3a1a; color: #3fb950; border: 1px solid #3fb950;
+      font-weight: 700; letter-spacing: .5px; animation: newPulse 2s ease-in-out infinite;
+    }
+    @keyframes newPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(63,185,80,.4); }
+      50%       { box-shadow: 0 0 0 4px rgba(63,185,80,0); }
+    }
+    .badge-sev-高  { background: #3d2a1a; color: #ffa657; }
+    .badge-sev-中  { background: #3a2a1a; color: #e3b341; }
+    .badge-sev-低  { background: #1a2a1a; color: #7ee787; }
+    .badge-source  { background: var(--surface); color: var(--text-dim); }
+    .news-summary { color: var(--text-dim); font-size: 13px; line-height: 1.65; }
+    .news-date { color: var(--text-dim); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+
+    /* ── 分頁 ── */
+    .pagination {
+      display: flex; justify-content: center; align-items: center;
+      gap: 6px; margin-top: 20px; flex-wrap: wrap;
+    }
+    .page-btn {
+      padding: 8px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--card-bg); color: var(--text); cursor: pointer;
+      min-width: 40px; text-align: center;
+    }
+    .page-btn:hover { border-color: var(--accent); }
+    .page-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── 空狀態 ── */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+    .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+
+    /* ── 載入動畫 ── */
+    .loading { text-align: center; padding: 40px; color: var(--text-dim); }
+    .spinner {
+      display: inline-block; width: 24px; height: 24px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── 平板 ── */
+    @media (max-width: 900px) {
+      .stats-grid  { grid-template-columns: 1fr 1fr; }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-wrap  { height: 200px; }
+      .header-right .update-time { display: none; } /* 隱藏「最後更新」文字 */
+    }
+
+    /* ── 手機 ── */
+    @media (max-width: 600px) {
+      header { padding: 0 14px; height: 52px; }
+      .logo-text { display: none; } /* 手機只留 icon */
+      .nav-links a { padding: 6px 10px; font-size: 12px; }
+      .header-right { display: none; } /* 手機隱藏更新時間 */
+
+      main { padding: 12px; }
+
+      .stats-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .stat-card { padding: 12px; border-radius: 10px; }
+      .stat-value { font-size: 26px; }
+      .stat-label { font-size: 10px; }
+
+      .charts-grid { gap: 8px; margin-bottom: 12px; }
+      .chart-card  { padding: 12px; }
+      .chart-wrap  { height: 170px; }
+      .chart-title { font-size: 12px; margin-bottom: 8px; }
+
+      /* 篩選器：手機折疊 */
+      .filter-toggle-btn { display: flex; align-items: center; justify-content: space-between; }
+      .filter-bar {
+        gap: 8px;
+        padding: 12px;
+      }
+      .filter-group { width: calc(50% - 4px); }
+      .filter-bar input, .filter-bar select {
+        min-width: unset;
+        width: 100%;
+        font-size: 14px; /* 手機防止 iOS 自動縮放 */
+        padding: 10px 10px;
+      }
+      .filter-btn-group { display: flex; gap: 8px; width: 100%; }
+      .filter-btn-group .btn { flex: 1; padding: 10px; }
+
+      /* 新聞卡片 */
+      .news-card { padding: 12px; }
+      .news-header { flex-direction: column; gap: 4px; }
+      .news-date { font-size: 10px; }
+      .news-title { font-size: 14px; }
+      .news-summary { font-size: 12px; }
+      .badge { font-size: 10px; padding: 2px 8px; }
+
+      /* 分頁 */
+      .pagination { gap: 4px; margin-top: 16px; }
+      .page-btn { padding: 8px 10px; font-size: 12px; min-width: 36px; }
+      .page-info { display: none; } /* 手機隱藏分頁資訊文字 */
+    }
+  </style>
+</head>
+<body x-data="dashboard()" x-init="init()">
+
+<!-- 頂部導覽 -->
+<header>
+  <div class="logo">
+    <img src="/static/wangwang-logo.jpeg" alt="旺旺" class="logo-icon" style="height:38px;vertical-align:middle;">
+    <span class="logo-text">資安新聞分析平台</span>
+  </div>
+  <nav class="nav-links">
+    <a href="/" class="active">📊 儀表板</a>
+    <a href="/admin">⚙️ 管理</a>
+  </nav>
+  <div class="header-right">
+    <span><span class="pulse"></span>即時監控</span>
+    <span class="update-time" x-text="'更新：' + lastUpdate"></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- 統計卡片 -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">總新聞數</div>
+      <div class="stat-value color-blue" x-text="stats.total_articles ?? '—'"></div>
+      <div class="stat-sub">資料庫累計</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">今日新增</div>
+      <div class="stat-value color-green" x-text="stats.today_articles ?? '—'"></div>
+      <div class="stat-sub">今天收集</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">嚴重威脅</div>
+      <div style="display:flex;align-items:baseline;gap:12px;margin:6px 0 2px">
+        <div>
+          <span class="stat-value color-red"  x-text="stats.today_critical ?? '—'"></span>
+          <div class="stat-sub" style="margin-top:0">今日</div>
+        </div>
+        <div style="color:var(--border);font-size:1.2em">／</div>
+        <div>
+          <span class="stat-value color-red"  x-text="stats.month_critical ?? '—'"></span>
+          <div class="stat-sub" style="margin-top:0">本月</div>
+        </div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">攻擊類型</div>
+      <div class="stat-value color-yellow" x-text="stats.attack_types ? stats.attack_types.length : '—'"></div>
+      <div class="stat-sub">不同攻擊種類</div>
+    </div>
+  </div>
+
+  <!-- 圖表區 -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">⚔️ 攻擊類型分佈</div>
+      <div class="chart-wrap">
+        <canvas id="attackChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">🌏 受影響地區</div>
+      <div class="chart-wrap">
+        <canvas id="regionChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">💻 受影響系統</div>
+      <div class="chart-wrap">
+        <canvas id="systemChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">📈 近 7 天新聞趨勢</div>
+      <div class="chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 篩選區（手機可折疊） -->
+  <button class="filter-toggle-btn" @click="filterOpen = !filterOpen">
+    <span>🔍 篩選條件</span>
+    <span x-text="filterOpen ? '▲ 收起' : '▼ 展開'"></span>
+  </button>
+  <div class="filter-bar" x-show="filterOpen" x-transition>
+    <div class="filter-group" style="flex:1;min-width:200px">
+      <label>關鍵字搜尋</label>
+      <input type="text" x-model="filters.q" placeholder="搜尋標題或摘要..."
+             @keydown.enter="applyFilters()">
+    </div>
+    <div class="filter-group">
+      <label>攻擊類型</label>
+      <select x-model="filters.attack_type" @change="applyFilters()">
+        <option value="">全部</option>
+        <template x-for="t in attackTypes" :key="t"><option :value="t" x-text="t"></option></template>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>地區</label>
+      <select x-model="filters.region" @change="applyFilters()">
+        <option value="">全部</option>
+        <template x-for="r in regions" :key="r"><option :value="r" x-text="r"></option></template>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>受影響系統</label>
+      <select x-model="filters.affected_system" @change="applyFilters()">
+        <option value="">全部</option>
+        <template x-for="s in systems" :key="s"><option :value="s" x-text="s"></option></template>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>嚴重程度</label>
+      <select x-model="filters.severity" @change="applyFilters()">
+        <option value="">全部</option>
+        <option value="嚴重">嚴重</option>
+        <option value="高">高</option>
+        <option value="中">中</option>
+        <option value="低">低</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>時間範圍</label>
+      <select x-model="filters.days" @change="applyFilters()">
+        <option value="">全部時間</option>
+        <option value="1">今天</option>
+        <option value="7">近 7 天</option>
+        <option value="30">近 30 天</option>
+        <option value="90">近 90 天</option>
+      </select>
+    </div>
+    <div class="filter-btn-group">
+      <button class="btn btn-primary" @click="applyFilters()">🔍 搜尋</button>
+      <button class="btn btn-ghost" @click="resetFilters()">重置</button>
+    </div>
+  </div>
+
+  <!-- 新聞列表 -->
+  <div x-show="loading" class="loading">
+    <div class="spinner"></div>
+    <p style="margin-top:12px">載入中...</p>
+  </div>
+
+  <div x-show="!loading && news.length === 0" class="empty-state">
+    <div class="icon">📭</div>
+    <p>找不到符合條件的新聞</p>
+    <p style="font-size:12px;margin-top:8px">請調整篩選條件，或至管理介面手動觸發爬蟲</p>
+  </div>
+
+  <div class="news-list" x-show="!loading && news.length > 0">
+    <template x-for="article in news" :key="article.id">
+      <div class="news-card">
+        <div class="news-header">
+          <div class="news-title">
+            <span class="badge badge-new" x-show="isTodayCollected(article)" style="margin-right:6px;font-size:11px;padding:2px 7px;vertical-align:middle">NEW</span>
+            <a :href="article.url" target="_blank" x-text="article.title"></a>
+          </div>
+          <span class="news-date" x-text="formatDate(article.published_date || article.collected_date)"></span>
+        </div>
+        <div class="news-meta">
+          <span class="badge badge-source" x-text="article.source_name || '未知來源'"></span>
+          <span class="badge badge-attack" x-show="article.attack_type" x-text="'⚔️ ' + article.attack_type"></span>
+          <span class="badge badge-region" x-show="article.region" x-text="'📍 ' + article.region"></span>
+          <span class="badge badge-system" x-show="article.affected_system" x-text="'💻 ' + article.affected_system"></span>
+          <span class="badge" :class="'badge-sev-' + article.severity" x-show="article.severity" x-text="'⚠️ ' + article.severity"></span>
+        </div>
+        <div class="news-summary" x-show="article.summary" x-text="article.summary"></div>
+      </div>
+    </template>
+  </div>
+
+  <!-- 分頁 -->
+  <div class="pagination" x-show="totalPages > 1">
+    <button class="page-btn" @click="gotoPage(1)" :disabled="currentPage <= 1" title="第一頁">«</button>
+    <button class="page-btn" @click="gotoPage(currentPage-1)" :disabled="currentPage <= 1">‹ 上一頁</button>
+    <template x-for="p in visiblePages()" :key="p">
+      <button class="page-btn" :class="{'active': p === currentPage}" @click="gotoPage(p)" x-text="p"></button>
+    </template>
+    <button class="page-btn" @click="gotoPage(currentPage+1)" :disabled="currentPage >= totalPages">下一頁 ›</button>
+    <button class="page-btn" @click="gotoPage(totalPages)" :disabled="currentPage >= totalPages" title="最後一頁">»</button>
+    <span class="page-info" style="color:var(--text-dim);font-size:12px;margin-left:4px"
+          x-text="`共 ${totalItems} 筆，第 ${currentPage}/${totalPages} 頁`"></span>
+  </div>
+
+</main>
+
+<script>
+const API = '';
+
+const CHART_COLORS = [
+  '#58a6ff','#3fb950','#d29922','#f85149','#bc8cff',
+  '#ff7b72','#56d364','#e3b341','#79c0ff','#ffa657',
+  '#7ee787','#ff9f43','#a29bfe','#fd79a8','#00cec9',
+];
+
+// ── 圖表：完全獨立於 Alpine.js，頁面載入後直接執行 ──────────────
+const _chartInstances = {};
+
+function renderCharts(stats) {
+  Chart.defaults.color       = '#8b949e';
+  Chart.defaults.borderColor = '#30363d';
+
+  const labels = arr => (arr || []).map(x => x.label);
+  const data   = arr => (arr || []).map(x => x.count);
+
+  const draw = (id, cfg) => {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    if (_chartInstances[id]) { try { _chartInstances[id].destroy(); } catch(e){} }
+    _chartInstances[id] = new Chart(canvas, cfg);
+  };
+
+  draw('attackChart', {
+    type: 'doughnut',
+    data: {
+      labels:   labels(stats.attack_types),
+      datasets: [{ data: data(stats.attack_types), backgroundColor: CHART_COLORS, borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+
+  draw('regionChart', {
+    type: 'bar',
+    data: {
+      labels:   labels(stats.regions),
+      datasets: [{ data: data(stats.regions), backgroundColor: '#58a6ff', borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { color: '#30363d' } }, y: { grid: { display: false } } }
+    }
+  });
+
+  draw('systemChart', {
+    type: 'bar',
+    data: {
+      labels:   labels(stats.affected_systems),
+      datasets: [{ data: data(stats.affected_systems), backgroundColor: '#d29922', borderRadius: 4 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: { color: '#30363d' } }, y: { grid: { display: false } } }
+    }
+  });
+
+  draw('trendChart', {
+    type: 'line',
+    data: {
+      labels:   labels(stats.weekly_trend),
+      datasets: [{
+        data:            data(stats.weekly_trend),
+        borderColor:     '#3fb950',
+        backgroundColor: 'rgba(63,185,80,.15)',
+        fill: true, tension: .3, pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#30363d' } },
+        y: { grid: { color: '#30363d' }, beginAtZero: true, ticks: { stepSize: 1 } }
+      }
+    }
+  });
+}
+
+// 頁面載入後立即抓資料並繪製
+window.addEventListener('DOMContentLoaded', () => {
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(stats => {
+      // 更新 Alpine.js 的 stats（透過全域暴露）
+      window._dashboardStats = stats;
+      renderCharts(stats);
+    })
+    .catch(err => console.error('[Charts] /api/stats 失敗:', err));
+});
+
+// ── Alpine.js dashboard 物件 ─────────────────────────────────
+function dashboard() {
+  return {
+    stats:        {},
+    news:         [],
+    loading:      false,
+    currentPage:  1,
+    pageSize:     15,
+    totalItems:   0,
+    totalPages:   1,
+    lastUpdate:   '—',
+    filters: { q:'', attack_type:'', region:'', affected_system:'', severity:'', days:'' },
+    filterOpen:   true,   // 桌面預設展開；手機由 CSS 控制按鈕顯示
+    attackTypes:  [],
+    regions:      [],
+    systems:      [],
+
+    async init() {
+      // 手機預設折疊篩選器
+      if (window.innerWidth <= 600) this.filterOpen = false;
+      await Promise.all([ this.loadStats(), this.loadNews() ]);
+      this.lastUpdate = new Date().toLocaleTimeString('zh-TW');
+    },
+
+    async loadStats() {
+      try {
+        // 若 DOMContentLoaded 已先抓到，直接用快取
+        if (window._dashboardStats) {
+          this.stats = window._dashboardStats;
+        } else {
+          const res  = await fetch(`${API}/api/stats`);
+          this.stats = await res.json();
+          window._dashboardStats = this.stats;
+          renderCharts(this.stats);
+        }
+        this.attackTypes = (this.stats.attack_types    || []).map(x => x.label);
+        this.regions     = (this.stats.regions          || []).map(x => x.label);
+        this.systems     = (this.stats.affected_systems || []).map(x => x.label);
+      } catch(e) { console.error('Stats error:', e); }
+    },
+
+    async loadNews() {
+      this.loading = true;
+      try {
+        const params = new URLSearchParams({ page: this.currentPage, size: this.pageSize });
+        if (this.filters.q)               params.set('q', this.filters.q);
+        if (this.filters.attack_type)     params.set('attack_type', this.filters.attack_type);
+        if (this.filters.region)          params.set('region', this.filters.region);
+        if (this.filters.affected_system) params.set('affected_system', this.filters.affected_system);
+        if (this.filters.severity)        params.set('severity', this.filters.severity);
+        if (this.filters.days)            params.set('days', this.filters.days);
+
+        const res  = await fetch(`${API}/api/news?${params}`);
+        const data = await res.json();
+        this.news       = data.items;
+        this.totalItems = data.total;
+        this.totalPages = Math.ceil(data.total / this.pageSize) || 1;
+      } catch(e) { console.error('News error:', e); }
+      this.loading = false;
+    },
+
+    applyFilters() { this.currentPage = 1; this.loadNews(); },
+    resetFilters()  {
+      this.filters = { q:'', attack_type:'', region:'', affected_system:'', severity:'', days:'' };
+      this.currentPage = 1;
+      this.loadNews();
+    },
+
+    gotoPage(p) {
+      if (p < 1 || p > this.totalPages) return;
+      this.currentPage = p;
+      this.loadNews();
+      window.scrollTo({ top: 400, behavior: 'smooth' });
+    },
+
+    visiblePages() {
+      const pages = [];
+      const start = Math.max(1, this.currentPage - 2);
+      const end   = Math.min(this.totalPages, start + 4);
+      for (let i = start; i <= end; i++) pages.push(i);
+      return pages;
+    },
+
+    formatDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('zh-TW', {
+        year:'numeric', month:'2-digit', day:'2-digit',
+        hour:'2-digit', minute:'2-digit'
+      });
+    },
+    isToday(d) {
+      if (!d) return false;
+      const date = new Date(d);
+      const now  = new Date();
+      return date.getFullYear() === now.getFullYear() &&
+             date.getMonth()    === now.getMonth()    &&
+             date.getDate()     === now.getDate();
+    },
+    isTodayCollected(article) {
+      return this.isToday(article.collected_date);
+    },
+
+  };
+}
+</script>
+</body>
+</html>

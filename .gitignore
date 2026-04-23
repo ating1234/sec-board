@@ -1,0 +1,22 @@
+# 虛擬環境
+venv/
+.venv/
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 環境變數（含 API Key，絕對不能上傳）
+.env
+
+# macOS
+.DS_Store
+
+# 編輯器
+.vscode/
+.idea/
+
+# 測試
+*.log
