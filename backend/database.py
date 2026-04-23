@@ -73,6 +73,15 @@ class Setting(Base):
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AdminSession(Base):
+    """管理員 Session（存 DB，重啟不會登出）"""
+    __tablename__ = "admin_sessions"
+
+    token      = Column(String(64), primary_key=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CrawlerLog(Base):
     """爬蟲執行紀錄"""
     __tablename__ = "crawler_logs"

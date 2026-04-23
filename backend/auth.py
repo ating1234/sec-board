@@ -1,21 +1,18 @@
 """
 管理介面身份驗證
 - 密碼以 PBKDF2-SHA256 雜湊儲存於資料庫
-- 登入後發給隨機 Session Token（Cookie）
-- Session 有效期 24 小時
+- Session token 存於 DB（重啟服務後仍有效）
+- Session 有效期 24 小時，過期自動清除
 """
 
 import hashlib
 import hmac
 import secrets
-import time
+from datetime import datetime, timedelta
 from typing import Optional
 
 
-# ── Session 記憶體儲存 ─────────────────────────────────────────
-# {token: expiry_timestamp}
-_sessions: dict[str, float] = {}
-SESSION_TTL = 24 * 3600  # 24 小時
+SESSION_TTL = timedelta(hours=24)
 
 
 # ── 密碼雜湊 ──────────────────────────────────────────────────
@@ -43,18 +40,26 @@ def verify_password(password: str, stored_hash: str) -> bool:
         return False
 
 
-# ── Session 管理 ───────────────────────────────────────────────
+# ── Session 管理（DB 版）─────────────────────────────────────
 
 def create_session() -> str:
-    """建立新 Session，回傳 token"""
-    # 清除過期 sessions
-    now = time.time()
-    expired = [t for t, exp in _sessions.items() if exp < now]
-    for t in expired:
-        _sessions.pop(t, None)
+    """建立新 Session，寫入 DB，回傳 token"""
+    from .database import SessionLocal, AdminSession
 
-    token = secrets.token_urlsafe(32)
-    _sessions[token] = now + SESSION_TTL
+    token      = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + SESSION_TTL
+
+    db = SessionLocal()
+    try:
+        # 順便清除過期 sessions
+        db.query(AdminSession).filter(
+            AdminSession.expires_at < datetime.utcnow()
+        ).delete()
+        db.add(AdminSession(token=token, expires_at=expires_at))
+        db.commit()
+    finally:
+        db.close()
+
     return token
 
 
@@ -62,19 +67,36 @@ def validate_session(token: Optional[str]) -> bool:
     """驗證 Session token 是否有效"""
     if not token:
         return False
-    exp = _sessions.get(token)
-    if exp is None:
-        return False
-    if time.time() > exp:
-        _sessions.pop(token, None)
-        return False
-    return True
+
+    from .database import SessionLocal, AdminSession
+
+    db = SessionLocal()
+    try:
+        row = db.query(AdminSession).filter_by(token=token).first()
+        if row is None:
+            return False
+        if datetime.utcnow() > row.expires_at:
+            db.delete(row)
+            db.commit()
+            return False
+        return True
+    finally:
+        db.close()
 
 
 def delete_session(token: Optional[str]) -> None:
-    """登出：刪除 Session"""
-    if token:
-        _sessions.pop(token, None)
+    """登出：從 DB 刪除 Session"""
+    if not token:
+        return
+
+    from .database import SessionLocal, AdminSession
+
+    db = SessionLocal()
+    try:
+        db.query(AdminSession).filter_by(token=token).delete()
+        db.commit()
+    finally:
+        db.close()
 
 
 # ── 預設密碼初始化 ─────────────────────────────────────────────
@@ -82,7 +104,7 @@ def delete_session(token: Optional[str]) -> None:
 DEFAULT_PASSWORD = "admin"
 
 
-def get_or_create_password_hash() -> str:
+def get_or_create_password_hash() -> tuple[str, bool]:
     """
     從資料庫取得密碼雜湊，若尚未設定則建立預設密碼並存入資料庫。
     回傳 (hash, is_new)
