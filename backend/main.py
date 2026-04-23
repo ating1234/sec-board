@@ -7,6 +7,8 @@ import csv
 import io
 import logging
 import os
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -118,6 +120,27 @@ async def admin_auth_middleware(request: Request, call_next):
 
 
 # ──────────────────────────────────────────────
+# 登入限流（防暴力破解）
+# ──────────────────────────────────────────────
+
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_LOGIN_MAX_ATTEMPTS = 5     # 最多 5 次
+_LOGIN_WINDOW_SEC   = 300   # 5 分鐘滑動視窗
+
+
+def _check_login_rate_limit(ip: str) -> bool:
+    """回傳 True 表示允許；False 表示達到上限。失敗後才計入次數，成功不計。"""
+    now = time.time()
+    # 清除視窗外的舊紀錄
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _LOGIN_WINDOW_SEC]
+    return len(_login_attempts[ip]) < _LOGIN_MAX_ATTEMPTS
+
+
+def _record_failed_login(ip: str) -> None:
+    _login_attempts[ip].append(time.time())
+
+
+# ──────────────────────────────────────────────
 # 登入 / 登出 API
 # ──────────────────────────────────────────────
 
@@ -126,10 +149,20 @@ class LoginRequest(BaseModel):
 
 
 @app.post("/api/admin/login", tags=["驗證"])
-def admin_login(body: LoginRequest):
+def admin_login(body: LoginRequest, request: Request):
     """管理員登入，成功後設定 Session Cookie"""
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 頻率限制：同一 IP 5 分鐘內最多 5 次失敗
+    if not _check_login_rate_limit(client_ip):
+        raise HTTPException(
+            status_code=429,
+            detail="登入嘗試過於頻繁，請 5 分鐘後再試"
+        )
+
     stored_hash, _ = get_or_create_password_hash()
     if not verify_password(body.password, stored_hash):
+        _record_failed_login(client_ip)
         raise HTTPException(status_code=401, detail="密碼錯誤")
 
     token = create_session()

@@ -147,17 +147,10 @@ def _fetch_feed(url: str) -> List[dict]:
         resp.raise_for_status()
         feed = feedparser.parse(resp.content)
         return feed.entries or []
-    except requests.exceptions.SSLError:
-        # SSL 驗證失敗時停用驗證（部分中文站點）
-        try:
-            resp = requests.get(
-                url, headers=HEADERS, timeout=FETCH_TIMEOUT, verify=False
-            )
-            feed = feedparser.parse(resp.content)
-            return feed.entries or []
-        except Exception as e:
-            logger.warning(f"RSS 抓取失敗（SSL bypass）{url}: {e}")
-            return []
+    except requests.exceptions.SSLError as e:
+        # SSL 驗證失敗：記錄錯誤並跳過，不允許降級繞過驗證
+        logger.error(f"RSS 來源 SSL 驗證失敗，跳過 {url}：{e}")
+        return []
     except Exception as e:
         logger.warning(f"RSS 抓取失敗 {url}: {e}")
         return []
