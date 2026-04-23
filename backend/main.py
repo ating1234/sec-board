@@ -3,6 +3,8 @@ FastAPI 主程式
 提供前台 API（新聞查詢、統計）與管理 API（設定、來源、爬蟲控制）
 """
 
+import csv
+import io
 import logging
 import os
 from datetime import datetime, timedelta
@@ -12,7 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, case, and_, extract
 from sqlalchemy.orm import Session
@@ -218,6 +220,70 @@ def list_news(
     )
 
     return NewsListResponse(total=total, page=page, size=size, items=items)
+
+
+@app.get("/api/news/export", tags=["前台"])
+def export_news_csv(
+    q:               Optional[str] = Query(None),
+    attack_type:     Optional[str] = Query(None),
+    region:          Optional[str] = Query(None),
+    affected_system: Optional[str] = Query(None),
+    severity:        Optional[str] = Query(None),
+    days:            Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """匯出符合篩選條件的新聞為 CSV（UTF-8 BOM，Excel 可直接開啟）"""
+    query = db.query(NewsArticle)
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            (NewsArticle.title.ilike(like)) | (NewsArticle.summary.ilike(like))
+        )
+    if attack_type:
+        query = query.filter(NewsArticle.attack_type == attack_type)
+    if region:
+        query = query.filter(NewsArticle.region == region)
+    if affected_system:
+        query = query.filter(NewsArticle.affected_system == affected_system)
+    if severity:
+        query = query.filter(NewsArticle.severity == severity)
+    if days:
+        cutoff = datetime.utcnow() - timedelta(days=days)
+        query = query.filter(NewsArticle.collected_date >= cutoff)
+
+    articles = (
+        query.order_by(
+            NewsArticle.published_date.desc().nullslast(),
+            NewsArticle.collected_date.desc()
+        ).all()
+    )
+
+    # 產生 CSV（加 BOM 讓 Excel 正確顯示中文）
+    output = io.StringIO()
+    output.write('\ufeff')  # UTF-8 BOM
+    writer = csv.writer(output)
+    writer.writerow(['標題', '來源', '發布日期', '收集日期', '攻擊類型', '地區', '受影響系統', '嚴重程度', '摘要', '連結'])
+    for a in articles:
+        writer.writerow([
+            a.title or '',
+            a.source_name or '',
+            a.published_date.strftime('%Y-%m-%d %H:%M') if a.published_date else '',
+            a.collected_date.strftime('%Y-%m-%d %H:%M') if a.collected_date else '',
+            a.attack_type or '',
+            a.region or '',
+            a.affected_system or '',
+            a.severity or '',
+            a.summary or '',
+            a.url or '',
+        ])
+
+    filename = f"cybersec_{datetime.utcnow().strftime('%Y%m%d')}.csv"
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type='text/csv; charset=utf-8-sig',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
 
 
 @app.get("/api/news/{article_id}", response_model=NewsArticleOut, tags=["前台"])

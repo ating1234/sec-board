@@ -416,6 +416,7 @@
     <div class="filter-btn-group">
       <button class="btn btn-primary" @click="applyFilters()">🔍 搜尋</button>
       <button class="btn btn-ghost" @click="resetFilters()">重置</button>
+      <button class="btn btn-ghost" @click="exportCSV()" title="下載目前篩選結果">📥 CSV</button>
     </div>
   </div>
 
@@ -653,6 +654,20 @@ function dashboard() {
       const end   = Math.min(this.totalPages, start + 4);
       for (let i = start; i <= end; i++) pages.push(i);
       return pages;
+    },
+
+    exportCSV() {
+      const params = new URLSearchParams();
+      if (this.filters.q)               params.set('q',               this.filters.q);
+      if (this.filters.attack_type)     params.set('attack_type',     this.filters.attack_type);
+      if (this.filters.region)          params.set('region',          this.filters.region);
+      if (this.filters.affected_system) params.set('affected_system', this.filters.affected_system);
+      if (this.filters.severity)        params.set('severity',        this.filters.severity);
+      if (this.filters.days)            params.set('days',            this.filters.days);
+      const url = `/api/news/export?${params.toString()}`;
+      const a   = document.createElement('a');
+      a.href    = url;
+      a.click();
     },
 
     async setTrendDays(days) {
