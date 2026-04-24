@@ -343,7 +343,8 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Groq API 金鑰</label>
-            <input type="password" x-model="settings.groq_api_key" placeholder="gsk_...">
+            <input type="password" x-model="settings.groq_api_key"
+                   :placeholder="settingsMeta.groq_api_key ? '●●●●●● 已設定，留空則不變更' : 'gsk_...'">
             <span class="hint">
               前往 <a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>
               免費申請（無需信用卡）
@@ -366,7 +367,8 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Gemini API 金鑰</label>
-            <input type="password" x-model="settings.gemini_api_key" placeholder="AIza...">
+            <input type="password" x-model="settings.gemini_api_key"
+                   :placeholder="settingsMeta.gemini_api_key ? '●●●●●● 已設定，留空則不變更' : 'AIza...'">
             <span class="hint">
               前往 <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent)">aistudio.google.com</a>
               取得（免費，需 Google 帳號）
@@ -736,6 +738,7 @@ function adminApp() {
   return {
     tab: 'general',
     settings: {},
+    settingsMeta: {},   // 紀錄敏感欄位「已設定」狀態（value 已遮罩，但伺服器回傳 has_value）
     sources: [],
     crawlerLogs: [],
     crawlerRunning: false,
@@ -804,7 +807,12 @@ function adminApp() {
         if (!res) return;
         const rows = await res.json();
         this.settings = {};
-        rows.forEach(r => { this.settings[r.key] = r.value; });
+        this.settingsMeta = {};
+        rows.forEach(r => {
+          this.settings[r.key] = r.value;
+          // 後端針對敏感欄位會遮罩 value 但帶 has_value=true，記下來給 placeholder 用
+          if (r.has_value) this.settingsMeta[r.key] = true;
+        });
         // 解析 crawler_schedule_hours 還原 3 個時段選擇器
         const hoursRaw = this.settings.crawler_schedule_hours || this.settings.crawler_schedule_hour || '8,14,20';
         const hours = hoursRaw.split(',').map(h => h.trim()).filter(Boolean);

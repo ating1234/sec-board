@@ -48,7 +48,7 @@ from .config import get_setting, set_setting
 from .auth import (
     verify_password, hash_password,
     create_session, validate_session, delete_session,
-    get_or_create_password_hash,
+    get_or_create_password_hash, AdminPasswordNotConfigured,
 )
 from .collector import run_crawler, reclassify_article, reclassify_all_articles, cleanup_old_articles
 from .historical_collector import run_historical_collection
@@ -72,10 +72,17 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("初始化資料庫...")
     init_db()
-    # 確保管理員密碼已初始化
-    _, is_new = get_or_create_password_hash()
+    # 確保管理員密碼已初始化（首次啟動需從環境變數 INITIAL_ADMIN_PASSWORD 讀取）
+    try:
+        _, is_new = get_or_create_password_hash()
+    except AdminPasswordNotConfigured as e:
+        logger.error("❌ 無法啟動：%s", e)
+        raise
     if is_new:
-        logger.warning("⚠️  管理員密碼已設為預設值 'admin'，請登入後立即至「一般設定」更改！")
+        logger.warning(
+            "✅ 管理員密碼已從 INITIAL_ADMIN_PASSWORD 初始化，"
+            "請立即登入後至「一般設定」確認/更改，並從環境變數移除該密碼。"
+        )
     # 若尚未設定多時段排程，寫入預設值（一天 3 次：08:00, 14:00, 20:00）
     if not get_setting("crawler_schedule_hours", ""):
         set_setting("crawler_schedule_hours", "8,14,20")
@@ -140,6 +147,27 @@ _login_attempts: dict[str, list[float]] = defaultdict(list)
 _LOGIN_MAX_ATTEMPTS = 5     # 最多 5 次
 _LOGIN_WINDOW_SEC   = 300   # 5 分鐘滑動視窗
 
+# 是否信任反向代理傳進來的 X-Forwarded-For（Railway、Cloudflare、Nginx 等）
+# 預設開啟；若在裸機直接對公網，改成 "0" 以避免用戶偽造 XFF 繞過限流。
+_TRUST_PROXY = os.environ.get("TRUST_PROXY_HEADERS", "1") != "0"
+
+
+def _get_client_ip(request: Request) -> str:
+    """取得真實 client IP。
+    Railway / Cloudflare / Nginx 後面 request.client.host 會是 proxy，
+    改讀 X-Forwarded-For 的第一段（最左 = 原始 client）。"""
+    if _TRUST_PROXY:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            # XFF 格式：client, proxy1, proxy2 → 取最左
+            first = xff.split(",")[0].strip()
+            if first:
+                return first
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
 
 def _check_login_rate_limit(ip: str) -> bool:
     """回傳 True 表示允許；False 表示達到上限。失敗後才計入次數，成功不計。"""
@@ -164,10 +192,11 @@ class LoginRequest(BaseModel):
 @app.post("/api/admin/login", tags=["驗證"])
 def admin_login(body: LoginRequest, request: Request):
     """管理員登入，成功後設定 Session Cookie"""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _get_client_ip(request)
 
     # 頻率限制：同一 IP 5 分鐘內最多 5 次失敗
     if not _check_login_rate_limit(client_ip):
+        logger.warning("登入限流觸發：ip=%s", client_ip)
         raise HTTPException(
             status_code=429,
             detail="登入嘗試過於頻繁，請 5 分鐘後再試"
@@ -176,6 +205,7 @@ def admin_login(body: LoginRequest, request: Request):
     stored_hash, _ = get_or_create_password_hash()
     if not verify_password(body.password, stored_hash):
         _record_failed_login(client_ip)
+        logger.warning("登入失敗：ip=%s", client_ip)
         raise HTTPException(status_code=401, detail="密碼錯誤")
 
     token = create_session()
@@ -455,16 +485,41 @@ def get_trend(days: int = Query(7, ge=7, le=30), db: Session = Depends(get_db)):
 # 管理 API：設定
 # ──────────────────────────────────────────────
 
+# 敏感設定欄位（GET 時會遮罩 value、PUT 時若收到空值則保留原值）
+_SENSITIVE_SUFFIXES = ("_api_key", "_secret", "_token", "_password", "_hash")
+
+def _is_sensitive_key(key: str) -> bool:
+    key = (key or "").lower()
+    return any(key.endswith(s) for s in _SENSITIVE_SUFFIXES)
+
+
 @app.get("/api/admin/settings", response_model=list[SettingOut], tags=["管理"])
 def get_all_settings(db: Session = Depends(get_db)):
-    return db.query(Setting).order_by(Setting.key).all()
+    """回傳所有設定；敏感欄位（API Key、密碼、Token 等）value 會被遮罩為空字串，
+    但會透過 has_value 告知前端「已設定」。"""
+    rows = db.query(Setting).order_by(Setting.key).all()
+    result = []
+    for r in rows:
+        sensitive = _is_sensitive_key(r.key)
+        result.append(SettingOut(
+            key=r.key,
+            value="" if sensitive else (r.value or ""),
+            description=r.description,
+            updated_at=r.updated_at,
+            has_value=bool(r.value) if sensitive else bool(r.value),
+        ))
+    return result
 
 
 @app.put("/api/admin/settings", tags=["管理"])
 def update_settings(payload: BulkSettingUpdate, db: Session = Depends(get_db)):
-    """批次更新設定"""
+    """批次更新設定。敏感欄位（API Key / 密碼 / Token）若值為空，會保留原值不覆寫。"""
     for key, value in payload.settings.items():
-        set_setting(key, str(value), db)
+        value_str = "" if value is None else str(value)
+        # 敏感欄位空字串視為「未變更」，避免前端遮罩後誤將 key 清空
+        if _is_sensitive_key(key) and value_str.strip() == "":
+            continue
+        set_setting(key, value_str, db)
 
     # 若排程時間被修改，動態更新排程
     if "crawler_schedule_hours" in payload.settings or \

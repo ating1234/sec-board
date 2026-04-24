@@ -7,6 +7,7 @@
 
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
@@ -99,20 +100,39 @@ def delete_session(token: Optional[str]) -> None:
         db.close()
 
 
-# ── 預設密碼初始化 ─────────────────────────────────────────────
+# ── 初始密碼初始化 ─────────────────────────────────────────────
+#
+# 不再使用硬編預設密碼。首次啟動時需從環境變數 INITIAL_ADMIN_PASSWORD 讀取，
+# 未設定即拒絕啟動，避免 Dashboard 被 "admin" / "admin" 爆破。
+# 使用方式（.env 或部署平台環境變數）：
+#     INITIAL_ADMIN_PASSWORD=<至少 8 碼的強密碼>
+# 初始化完成後可安全移除此環境變數，並登入後從「一般設定」更改密碼。
 
-DEFAULT_PASSWORD = "admin"
+
+class AdminPasswordNotConfigured(RuntimeError):
+    """首次啟動但未設定 INITIAL_ADMIN_PASSWORD 時拋出。"""
 
 
 def get_or_create_password_hash() -> tuple[str, bool]:
     """
-    從資料庫取得密碼雜湊，若尚未設定則建立預設密碼並存入資料庫。
-    回傳 (hash, is_new)
+    從資料庫取得密碼雜湊，若尚未設定則從環境變數 INITIAL_ADMIN_PASSWORD 建立。
+    回傳 (hash, is_new)。若首次啟動且未提供該環境變數，會 raise AdminPasswordNotConfigured。
     """
     from .config import get_setting, set_setting
     stored = get_setting("admin_password_hash", "")
-    if not stored:
-        new_hash = hash_password(DEFAULT_PASSWORD)
-        set_setting("admin_password_hash", new_hash)
-        return new_hash, True
-    return stored, False
+    if stored:
+        return stored, False
+
+    initial_pw = os.environ.get("INITIAL_ADMIN_PASSWORD", "").strip()
+    if not initial_pw:
+        raise AdminPasswordNotConfigured(
+            "尚未設定管理員密碼。請在環境變數設定 INITIAL_ADMIN_PASSWORD=<至少 8 碼>，"
+            "初始化完成後可移除此環境變數。"
+        )
+    if len(initial_pw) < 8:
+        raise AdminPasswordNotConfigured(
+            "INITIAL_ADMIN_PASSWORD 長度需至少 8 碼，請設定更強的密碼。"
+        )
+    new_hash = hash_password(initial_pw)
+    set_setting("admin_password_hash", new_hash)
+    return new_hash, True

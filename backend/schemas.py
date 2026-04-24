@@ -66,6 +66,7 @@ class SettingOut(BaseModel):
     value:       str
     description: Optional[str]
     updated_at:  Optional[datetime]
+    has_value:   bool = False   # 敏感欄位遮罩時，仍讓前端知道「已設定」
 
     class Config:
         from_attributes = True
