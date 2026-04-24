@@ -740,14 +740,17 @@ function dashboard() {
 
     formatDate(d) {
       if (!d) return '—';
-      return new Date(d).toLocaleDateString('zh-TW', {
+      // 後端儲存 UTC 時間，加 Z 讓瀏覽器正確轉換為台灣時間（+8h）
+      const utcStr = d.endsWith('Z') ? d : d + 'Z';
+      return new Date(utcStr).toLocaleDateString('zh-TW', {
         year:'numeric', month:'2-digit', day:'2-digit',
         hour:'2-digit', minute:'2-digit'
       });
     },
     isToday(d) {
       if (!d) return false;
-      const date = new Date(d);
+      const utcStr = d.endsWith('Z') ? d : d + 'Z';
+      const date = new Date(utcStr);   // 自動轉為瀏覽器本地時間（台灣 UTC+8）
       const now  = new Date();
       return date.getFullYear() === now.getFullYear() &&
              date.getMonth()    === now.getMonth()    &&

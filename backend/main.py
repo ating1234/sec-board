@@ -9,9 +9,22 @@ import logging
 import os
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from contextlib import asynccontextmanager
+
+# ── 台灣時區（UTC+8）工具 ──────────────────────────────────────
+TW_TZ     = timezone(timedelta(hours=8))
+TW_OFFSET = timedelta(hours=8)
+
+def _tw_today() -> "date":
+    """回傳台灣今天的日期（UTC+8）"""
+    return (datetime.utcnow() + TW_OFFSET).date()
+
+def _utc_range_for_tw_day(tw_date) -> tuple:
+    """將台灣某日轉換為對應的 UTC 時間區間 [start, end)"""
+    start = datetime(tw_date.year, tw_date.month, tw_date.day) - TW_OFFSET
+    return start, start + timedelta(days=1)
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -329,14 +342,18 @@ def get_news(article_id: int, db: Session = Depends(get_db)):
 
 @app.get("/api/stats", response_model=DashboardStats, tags=["前台"])
 def get_stats(db: Session = Depends(get_db)):
-    today = datetime.utcnow().date()
+    # 以台灣日期（UTC+8）計算「今天」與「本月」
+    today       = _tw_today()
     month_start = today.replace(day=1)
+    today_start_utc, today_end_utc = _utc_range_for_tw_day(today)
+    month_start_utc = datetime(month_start.year, month_start.month, month_start.day) - TW_OFFSET
 
     # ── 數字統計（全部用 SQL COUNT，不載入資料到記憶體）──
     total = db.query(func.count(NewsArticle.id)).scalar() or 0
 
     today_count = db.query(func.count(NewsArticle.id)).filter(
-        func.date(NewsArticle.collected_date) == today
+        NewsArticle.collected_date >= today_start_utc,
+        NewsArticle.collected_date <  today_end_utc,
     ).scalar() or 0
 
     critical_count = db.query(func.count(NewsArticle.id)).filter(
@@ -345,12 +362,13 @@ def get_stats(db: Session = Depends(get_db)):
 
     today_critical = db.query(func.count(NewsArticle.id)).filter(
         NewsArticle.severity == "嚴重",
-        func.date(NewsArticle.collected_date) == today
+        NewsArticle.collected_date >= today_start_utc,
+        NewsArticle.collected_date <  today_end_utc,
     ).scalar() or 0
 
     month_critical = db.query(func.count(NewsArticle.id)).filter(
         NewsArticle.severity == "嚴重",
-        NewsArticle.collected_date >= month_start
+        NewsArticle.collected_date >= month_start_utc,
     ).scalar() or 0
 
     # ── 分布統計（GROUP BY）──
@@ -411,7 +429,7 @@ def get_stats(db: Session = Depends(get_db)):
 
 @app.get("/api/stats/trend", response_model=list[StatsItem], tags=["前台"])
 def get_trend(days: int = Query(7, ge=7, le=30), db: Session = Depends(get_db)):
-    today  = datetime.utcnow().date()
+    today  = _tw_today()   # 台灣日期
     cutoff = today - timedelta(days=days - 1)
     eff_date = func.date(
         func.coalesce(NewsArticle.published_date, NewsArticle.collected_date)

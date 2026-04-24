@@ -205,12 +205,16 @@ def _clean_text(text: str) -> str:
 
 
 def _count_today_articles(db) -> int:
-    """統計今天已收集的新聞數量"""
-    today = datetime.utcnow().date()
+    """統計台灣今天（UTC+8）已收集的新聞數量"""
+    from datetime import timedelta as _td
+    tw_today = (datetime.utcnow() + _td(hours=8)).date()
+    start_utc = datetime(tw_today.year, tw_today.month, tw_today.day) - _td(hours=8)
+    end_utc   = start_utc + _td(days=1)
     return (
         db.query(NewsArticle)
         .filter(
-            NewsArticle.collected_date >= datetime(today.year, today.month, today.day)
+            NewsArticle.collected_date >= start_utc,
+            NewsArticle.collected_date <  end_utc,
         )
         .count()
     )

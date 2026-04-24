@@ -1072,7 +1072,9 @@ function adminApp() {
 
     formatDate(d) {
       if (!d) return '—';
-      return new Date(d).toLocaleString('zh-TW');
+      // 後端儲存 UTC 時間，加 Z 讓瀏覽器自動轉換為台灣時間（+8h）
+      const utcStr = d.endsWith('Z') ? d : d + 'Z';
+      return new Date(utcStr).toLocaleString('zh-TW');
     },
 
     showToast(message, type = 'success') {
